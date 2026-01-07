@@ -5,7 +5,7 @@ Tests for WooCommerceConnector class
 import pytest
 import os
 from unittest.mock import Mock, patch, MagicMock
-from woocommerce_connector import WooCommerceConnector
+from woocommerce_connector.connector import WooCommerceConnector
 
 
 class TestWooCommerceConnector:
@@ -25,7 +25,7 @@ class TestWooCommerceConnector:
     def connector(self, mock_env_vars):
         """Create connector instance with mocked environment"""
         with patch.dict(os.environ, mock_env_vars):
-            with patch('woocommerce_connector.API') as mock_api:
+            with patch('woocommerce_connector.connector.API') as mock_api:
                 mock_api_instance = MagicMock()
                 mock_api.return_value = mock_api_instance
                 connector = WooCommerceConnector()
@@ -35,7 +35,7 @@ class TestWooCommerceConnector:
     def test_init_success(self, mock_env_vars):
         """Test successful connector initialization"""
         with patch.dict(os.environ, mock_env_vars):
-            with patch('woocommerce_connector.API') as mock_api:
+            with patch('woocommerce_connector.connector.API') as mock_api:
                 mock_api_instance = MagicMock()
                 mock_api.return_value = mock_api_instance
                 connector = WooCommerceConnector()

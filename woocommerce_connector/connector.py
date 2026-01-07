@@ -308,7 +308,7 @@ def check_api_version_standalone():
     
     load_dotenv()
     
-    url = os.getenv('WC_URL', '').rstrip('/')
+    url = (os.getenv('WC_URL') or '').rstrip('/')
     consumer_key = os.getenv('WC_CONSUMER_KEY')
     consumer_secret = os.getenv('WC_CONSUMER_SECRET')
     

@@ -113,8 +113,8 @@ sys.modules['customtkinter'] = mock_ctk
 sys.modules['tkinter.messagebox'] = MagicMock()
 sys.modules['tkinter.filedialog'] = MagicMock()
 
-from woocommerce_gui import WooCommerceGUI
-from woocommerce_connector import WooCommerceConnector
+from woocommerce_connector.gui import WooCommerceGUI
+from woocommerce_connector.connector import WooCommerceConnector
 
 
 class TestExcelExport:
@@ -171,7 +171,7 @@ class TestExcelExport:
     def mock_gui(self):
         """Create mock GUI instance"""
         # Patch WooCommerceConnector to avoid real API calls
-        with patch('woocommerce_gui.WooCommerceConnector'):
+        with patch('woocommerce_connector.gui.WooCommerceConnector'):
             gui = WooCommerceGUI()
             gui.products = []
             gui.status_label = MagicMock()
@@ -256,7 +256,7 @@ class TestExcelExport:
         mock_gui.products = sample_products
         
         # Mock filedialog
-        with patch('woocommerce_gui.filedialog.asksaveasfilename') as mock_dialog:
+        with patch('woocommerce_connector.gui.filedialog.asksaveasfilename') as mock_dialog:
             filename = str(tmp_path / "test_export.xlsx")
             mock_dialog.return_value = filename
             

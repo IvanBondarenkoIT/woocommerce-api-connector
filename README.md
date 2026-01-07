@@ -31,6 +31,16 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### 3a. Install as Package (Optional)
+
+You can also install the package in development mode:
+
+```bash
+pip install -e .
+```
+
+This allows you to use the package from anywhere and access CLI commands.
+
 ### 4. Configure Environment Variables
 
 1. Copy `.env.example` to `.env`:
@@ -63,7 +73,14 @@ pip install -r requirements.txt
 Run the modern GUI application:
 
 ```bash
-python woocommerce_gui.py
+# Using Python module
+python -m woocommerce_connector.gui
+
+# Or using the script
+python scripts/run_gui.py
+
+# Or after installation
+woocommerce-gui
 ```
 
 **Features:**
@@ -84,7 +101,14 @@ python woocommerce_gui.py
 Run the main script:
 
 ```bash
-python woocommerce_connector.py
+# Using Python module
+python -m woocommerce_connector.connector
+
+# Or using the script
+python scripts/run_connector.py
+
+# Or after installation
+woocommerce-connector
 ```
 
 This will:
@@ -98,19 +122,34 @@ This will:
 To check which API version works with your store:
 
 ```bash
-python woocommerce_connector.py --check-version
+python -m woocommerce_connector.connector --check-version
+# Or
+python scripts/run_connector.py --check-version
 ```
 
 ## Project Structure
 
 ```
-.
-├── woocommerce_connector.py  # Core API connector class
-├── woocommerce_gui.py        # Modern GUI application
+woocommerce-api-connector/
+├── woocommerce_connector/    # Main package
+│   ├── __init__.py          # Package initialization and exports
+│   ├── connector.py         # Core API connector class
+│   └── gui.py               # Modern GUI application
+├── tests/                    # Test suite
+│   ├── test_connector.py
+│   ├── test_excel_export.py
+│   └── test_api_version_check.py
+├── scripts/                  # Utility scripts
+│   ├── run_gui.py
+│   └── run_connector.py
+├── .github/workflows/        # CI/CD workflows
 ├── requirements.txt          # Python dependencies
-├── .env                      # Environment variables (not in git)
+├── setup.py                 # Package setup script
+├── pytest.ini               # Pytest configuration
 ├── .env.example             # Template for .env
 ├── .gitignore               # Git ignore rules
+├── LICENSE                  # MIT License
+├── CONTRIBUTING.md          # Contribution guidelines
 └── README.md                # This file
 ```
 

@@ -12,7 +12,7 @@ from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
-from woocommerce_connector import WooCommerceConnector
+from .connector import WooCommerceConnector
 
 # Set appearance mode and color theme
 ctk.set_appearance_mode("dark")  # "light" or "dark"
@@ -655,11 +655,10 @@ class WooCommerceGUI:
 
 
 def main():
-    """Main entry point"""
+    """Main entry point for GUI application"""
     app = WooCommerceGUI()
     app.run()
 
 
 if __name__ == "__main__":
     main()
-
