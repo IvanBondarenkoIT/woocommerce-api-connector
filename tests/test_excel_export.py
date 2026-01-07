@@ -10,24 +10,108 @@ from openpyxl import load_workbook
 
 # Mock customtkinter before importing woocommerce_gui
 import sys
-from unittest.mock import MagicMock as MockModule
+from unittest.mock import MagicMock
 
-# Create mock for customtkinter
-mock_ctk = MockModule()
-mock_ctk.CTk = MockModule
-mock_ctk.CTkFrame = MockModule
-mock_ctk.CTkLabel = MockModule
-mock_ctk.CTkButton = MockModule
-mock_ctk.CTkEntry = MockModule
-mock_ctk.CTkScrollableFrame = MockModule
-mock_ctk.CTkTextbox = MockModule
-mock_ctk.CTkFont = MockModule
-mock_ctk.set_appearance_mode = MockModule
-mock_ctk.set_default_color_theme = MockModule
+# Create proper mock classes that can be instantiated
+class MockCTk:
+    def __init__(self, *args, **kwargs):
+        pass
+    
+    def pack(self, *args, **kwargs):
+        pass
+    
+    def mainloop(self):
+        pass
+    
+    def title(self, *args, **kwargs):
+        pass
+    
+    def geometry(self, *args, **kwargs):
+        pass
+    
+    def after(self, *args, **kwargs):
+        pass
+
+class MockCTkFrame:
+    def __init__(self, *args, **kwargs):
+        pass
+    
+    def pack(self, *args, **kwargs):
+        pass
+    
+    def pack_propagate(self, *args, **kwargs):
+        pass
+
+class MockCTkLabel:
+    def __init__(self, *args, **kwargs):
+        pass
+    
+    def pack(self, *args, **kwargs):
+        pass
+    
+    def configure(self, *args, **kwargs):
+        pass
+
+class MockCTkButton:
+    def __init__(self, *args, **kwargs):
+        pass
+    
+    def pack(self, *args, **kwargs):
+        pass
+
+class MockCTkEntry:
+    def __init__(self, *args, **kwargs):
+        pass
+    
+    def pack(self, *args, **kwargs):
+        pass
+    
+    def bind(self, *args, **kwargs):
+        pass
+
+class MockCTkScrollableFrame:
+    def __init__(self, *args, **kwargs):
+        pass
+    
+    def pack(self, *args, **kwargs):
+        pass
+    
+    def winfo_children(self):
+        return []
+
+class MockCTkTextbox:
+    def __init__(self, *args, **kwargs):
+        pass
+    
+    def pack(self, *args, **kwargs):
+        pass
+    
+    def insert(self, *args, **kwargs):
+        pass
+    
+    def configure(self, *args, **kwargs):
+        pass
+
+class MockCTkFont:
+    def __init__(self, *args, **kwargs):
+        pass
+
+# Create mock module
+mock_ctk = MagicMock()
+mock_ctk.CTk = MockCTk
+mock_ctk.CTkFrame = MockCTkFrame
+mock_ctk.CTkLabel = MockCTkLabel
+mock_ctk.CTkButton = MockCTkButton
+mock_ctk.CTkEntry = MockCTkEntry
+mock_ctk.CTkScrollableFrame = MockCTkScrollableFrame
+mock_ctk.CTkTextbox = MockCTkTextbox
+mock_ctk.CTkFont = MockCTkFont
+mock_ctk.set_appearance_mode = MagicMock()
+mock_ctk.set_default_color_theme = MagicMock()
 
 sys.modules['customtkinter'] = mock_ctk
-sys.modules['tkinter.messagebox'] = MockModule()
-sys.modules['tkinter.filedialog'] = MockModule()
+sys.modules['tkinter.messagebox'] = MagicMock()
+sys.modules['tkinter.filedialog'] = MagicMock()
 
 from woocommerce_gui import WooCommerceGUI
 from woocommerce_connector import WooCommerceConnector
@@ -86,11 +170,13 @@ class TestExcelExport:
     @pytest.fixture
     def mock_gui(self):
         """Create mock GUI instance"""
-        # GUI is already mocked via sys.modules above
-        gui = WooCommerceGUI()
-        gui.products = []
-        gui.status_label = MagicMock()
-        return gui
+        # Patch WooCommerceConnector to avoid real API calls
+        with patch('woocommerce_gui.WooCommerceConnector'):
+            gui = WooCommerceGUI()
+            gui.products = []
+            gui.status_label = MagicMock()
+            gui.connector = None  # Don't try to connect
+            return gui
     
     def test_flatten_dict_simple(self, mock_gui):
         """Test flattening simple dictionary"""

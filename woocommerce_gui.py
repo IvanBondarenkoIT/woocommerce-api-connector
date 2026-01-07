@@ -558,6 +558,11 @@ class WooCommerceGUI:
             ws = wb.create_sheet(title="No Category")
             self._write_products_to_sheet(ws, products_without_category)
         
+        # If no sheets were created (no products at all), create an empty sheet
+        if len(wb.sheetnames) == 0:
+            ws = wb.create_sheet(title="No Products")
+            ws.cell(row=1, column=1, value="No products found")
+        
         # Save workbook
         wb.save(filename)
     
