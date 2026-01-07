@@ -27,4 +27,19 @@ Thumbs.db
 *.log
 *.db
 *.sqlite
+*.xlsx
+*.xls
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.cover
+.hypothesis/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
 

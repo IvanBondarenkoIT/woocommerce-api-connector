@@ -1,6 +1,9 @@
-# WooCommerce API Connection
+# WooCommerce API Connector
 
-Python project to connect to WordPress WooCommerce store via REST API and fetch product data.
+[![Tests](https://github.com/IvanBondarenkoIT/woocommerce-api-connector/actions/workflows/tests.yml/badge.svg)](https://github.com/IvanBondarenkoIT/woocommerce-api-connector/actions/workflows/tests.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+Python project to connect to WordPress WooCommerce store via REST API and fetch product data. Features a modern GUI for viewing and managing products, with Excel export functionality.
 
 ## Setup
 
@@ -40,8 +43,10 @@ pip install -r requirements.txt
    WC_URL=https://your-store.com
    WC_CONSUMER_KEY=ck_your_consumer_key_here
    WC_CONSUMER_SECRET=cs_your_consumer_secret_here
-   WC_API_VERSION=v3
+   WC_API_VERSION=wc/v3
    ```
+   
+   **Note:** API version should be `wc/v3` (not just `v3`)
 
 ### 5. Get WooCommerce API Credentials
 
@@ -53,7 +58,30 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Run the main script:
+### Option 1: GUI Application (Recommended)
+
+Run the modern GUI application:
+
+```bash
+python woocommerce_gui.py
+```
+
+**Features:**
+- 🎨 Modern dark theme interface
+- 📦 View all products in a scrollable list
+- 🔍 Search products by name or SKU
+- 📊 Detailed product information view
+- 💰 Price and stock status display
+- 📋 Full product data in JSON format
+- 📊 **Export to Excel** - Export all products grouped by categories
+  - Each category = separate Excel sheet (вкладка)
+  - All product attributes as columns
+  - Auto-formatted headers and column widths
+- ✏️ Edit functionality (coming soon)
+
+### Option 2: Command Line
+
+Run the main script:
 
 ```bash
 python woocommerce_connector.py
@@ -65,11 +93,20 @@ This will:
 - Display all available product fields
 - Show a summary of products
 
+### Check API Version
+
+To check which API version works with your store:
+
+```bash
+python woocommerce_connector.py --check-version
+```
+
 ## Project Structure
 
 ```
 .
-├── woocommerce_connector.py  # Main script
+├── woocommerce_connector.py  # Core API connector class
+├── woocommerce_gui.py        # Modern GUI application
 ├── requirements.txt          # Python dependencies
 ├── .env                      # Environment variables (not in git)
 ├── .env.example             # Template for .env
@@ -79,16 +116,103 @@ This will:
 
 ## Features
 
+### Core Functionality
 - ✅ Connect to WooCommerce REST API
 - ✅ Fetch products with pagination
 - ✅ Display all available product fields
 - ✅ Error handling and validation
 - ✅ Environment variable configuration
+- ✅ API version checking
+
+### GUI Application
+- ✅ Modern dark theme interface (CustomTkinter)
+- ✅ Product list with search functionality
+- ✅ Detailed product view
+- ✅ Real-time stock and price information
+- ✅ Category display
+- ✅ Full JSON data viewer
+- ✅ **Export to Excel** - Export all products with categories as separate sheets
+- 🔜 Product editing (coming soon)
+- 🔜 Save changes to store (coming soon)
+
+## Testing
+
+### Run Tests
+
+```bash
+# Install test dependencies
+pip install -r requirements.txt
+
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=woocommerce_connector --cov=woocommerce_gui --cov-report=html
+
+# Run specific test file
+pytest tests/test_connector.py
+
+# Run with verbose output
+pytest -v
+```
+
+### Test Coverage
+
+The project includes comprehensive tests for:
+- ✅ WooCommerce API connection
+- ✅ Product retrieval (single and paginated)
+- ✅ Excel export functionality
+- ✅ API version checking
+- ✅ Error handling
+
+## Development
+
+### Project Structure
+
+```
+.
+├── woocommerce_connector.py  # Core API connector class
+├── woocommerce_gui.py        # Modern GUI application
+├── tests/                    # Test suite
+│   ├── test_connector.py
+│   ├── test_excel_export.py
+│   └── test_api_version_check.py
+├── requirements.txt          # Python dependencies
+├── pytest.ini               # Pytest configuration
+├── .github/workflows/       # CI/CD workflows
+└── README.md                # This file
+```
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Running Tests Locally
+
+```bash
+# Install all dependencies including test packages
+pip install -r requirements.txt
+
+# Run tests
+pytest
+
+# Run tests with coverage report
+pytest --cov --cov-report=html
+```
 
 ## Next Steps
 
-- Add product filtering and search
-- Export products to CSV/JSON
-- Sync products to local database
-- Create web interface for displaying products
+- [x] Export products to Excel (with categories as sheets)
+- [x] Comprehensive test suite
+- [x] CI/CD with GitHub Actions
+- [ ] Add product editing in GUI
+- [ ] Save edited products to WooCommerce
+- [ ] Import products from Excel (update from file)
+- [ ] Sync products to local database
+- [ ] Bulk operations (update multiple products)
+- [ ] Product image display
 
