@@ -7,6 +7,28 @@ import os
 import json
 from unittest.mock import Mock, patch, MagicMock
 from openpyxl import load_workbook
+
+# Mock customtkinter before importing woocommerce_gui
+import sys
+from unittest.mock import MagicMock as MockModule
+
+# Create mock for customtkinter
+mock_ctk = MockModule()
+mock_ctk.CTk = MockModule
+mock_ctk.CTkFrame = MockModule
+mock_ctk.CTkLabel = MockModule
+mock_ctk.CTkButton = MockModule
+mock_ctk.CTkEntry = MockModule
+mock_ctk.CTkScrollableFrame = MockModule
+mock_ctk.CTkTextbox = MockModule
+mock_ctk.CTkFont = MockModule
+mock_ctk.set_appearance_mode = MockModule
+mock_ctk.set_default_color_theme = MockModule
+
+sys.modules['customtkinter'] = mock_ctk
+sys.modules['tkinter.messagebox'] = MockModule()
+sys.modules['tkinter.filedialog'] = MockModule()
+
 from woocommerce_gui import WooCommerceGUI
 from woocommerce_connector import WooCommerceConnector
 
@@ -64,11 +86,11 @@ class TestExcelExport:
     @pytest.fixture
     def mock_gui(self):
         """Create mock GUI instance"""
-        with patch('woocommerce_gui.ctk.CTk'):
-            with patch('woocommerce_gui.WooCommerceConnector'):
-                gui = WooCommerceGUI()
-                gui.products = []
-                return gui
+        # GUI is already mocked via sys.modules above
+        gui = WooCommerceGUI()
+        gui.products = []
+        gui.status_label = MagicMock()
+        return gui
     
     def test_flatten_dict_simple(self, mock_gui):
         """Test flattening simple dictionary"""
