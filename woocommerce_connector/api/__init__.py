@@ -14,14 +14,27 @@ API слой для работы с WooCommerce REST API.
     >>> products = repo.get_all()
 """
 
+from .exceptions import (
+    WooCommerceAPIError,
+    AuthenticationError,
+    NotFoundError,
+    RateLimitError,
+    APIResponseError,
+    ConfigurationError,
+    NetworkError,
+)
 # Будет добавлено после реализации
 # from .client import WooCommerceAPIClient
 # from .products import ProductsRepository
-# from .exceptions import WooCommerceAPIError, AuthenticationError
 
 __all__ = [
+    "WooCommerceAPIError",
+    "AuthenticationError",
+    "NotFoundError",
+    "RateLimitError",
+    "APIResponseError",
+    "ConfigurationError",
+    "NetworkError",
     # "WooCommerceAPIClient",
     # "ProductsRepository",
-    # "WooCommerceAPIError",
-    # "AuthenticationError",
 ]

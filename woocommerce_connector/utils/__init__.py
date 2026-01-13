@@ -11,11 +11,11 @@
     >>> logger.info("Application started")
 """
 
-# Будет добавлено после реализации
-# from .logger import setup_logger
-# from .validators import ProductValidator
+from .logger import setup_logger, get_logger
+# from .validators import ProductValidator  # Будет добавлено позже
 
 __all__ = [
-    # "setup_logger",
+    "setup_logger",
+    "get_logger",
     # "ProductValidator",
 ]
