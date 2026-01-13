@@ -47,8 +47,9 @@ class TestWooCommerceConnector:
     
     def test_init_missing_env_vars(self):
         """Test initialization with missing environment variables"""
+        from woocommerce_connector.api.exceptions import ConfigurationError
         with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ValueError, match="Missing required environment variables"):
+            with pytest.raises(ConfigurationError):
                 WooCommerceConnector()
     
     def test_get_products_success(self, connector):
@@ -67,22 +68,22 @@ class TestWooCommerceConnector:
     
     def test_get_products_error(self, connector):
         """Test product retrieval with error"""
+        from woocommerce_connector.api.exceptions import NotFoundError
         mock_response = Mock()
         mock_response.status_code = 404
         mock_response.text = "Not Found"
         connector.wcapi.get.return_value = mock_response
         
-        response = connector.get_products()
-        
-        assert response.status_code == 404
+        with pytest.raises(NotFoundError):
+            connector.get_products()
     
     def test_get_products_exception(self, connector):
         """Test product retrieval with exception"""
+        from woocommerce_connector.api.exceptions import NetworkError
         connector.wcapi.get.side_effect = Exception("Connection error")
         
-        response = connector.get_products()
-        
-        assert response is None
+        with pytest.raises(NetworkError):
+            connector.get_products()
     
     def test_get_all_products_single_page(self, connector):
         """Test getting all products from single page"""
