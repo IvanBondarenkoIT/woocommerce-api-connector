@@ -30,6 +30,12 @@ Thumbs.db
 *.xlsx
 *.xls
 
+# Data output files (можно добавить в git для примера, но большие файлы лучше игнорировать)
+data/output/*.json
+data/output/*.csv
+data/output/*.xlsx
+!data/output/.gitkeep
+
 # Testing
 .pytest_cache/
 .coverage

@@ -5,6 +5,10 @@
 
 Python project to connect to WordPress WooCommerce store via REST API and fetch product data. Features a modern GUI for viewing and managing products, with Excel export functionality.
 
+**NEW:** Added LILU (Leeloo.ai) API connector for managing clients and message templates.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for project structure overview.
+
 ## Setup
 
 ### 1. Create Virtual Environment
