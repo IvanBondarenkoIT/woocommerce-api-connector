@@ -47,7 +47,7 @@ class LILUClient:
     HTTP клиент для работы с LILU API.
     
     Этот класс инкапсулирует всю логику HTTP запросов:
-    - Аутентификация через API ключи
+    - Аутентификация через API токен
     - Обработка ошибок
     - Повторные попытки при временных ошибках
     - Логирование запросов
@@ -90,12 +90,37 @@ class LILUClient:
         # Устанавливаем заголовки по умолчанию
         self.session.headers.update(DEFAULT_HEADERS)
         
+        # Сохраняем учетные данные для использования в запросах
+        self.auth_token = None
+        self.api_key = None
+        self.api_secret = None
+        
         # Добавляем аутентификацию
-        # Для Junior: API ключи передаются в заголовках
-        self.session.headers.update({
-            'X-API-Key': settings.api_key,
-            'X-API-Secret': settings.api_secret,
-        })
+        # Для Junior: LILU API использует заголовок X-Leeloo-AuthToken со значением секрета
+        # или authToken в параметрах запроса
+        if settings.api_token:
+            # Вариант 1: Токен для использования в параметрах или заголовке
+            self.auth_token = settings.api_token
+            # Добавляем в заголовки
+            self.session.headers.update({
+                'X-Leeloo-AuthToken': settings.api_token,
+            })
+        elif settings.api_key and settings.api_secret:
+            # Вариант 2: API ключ может быть именем заголовка, секрет - значением
+            # Если ключ начинается с "X-", это заголовок
+            if settings.api_key.startswith('X-'):
+                # Ключ - это имя заголовка, секрет - значение
+                self.session.headers.update({
+                    settings.api_key: settings.api_secret,
+                })
+            else:
+                # Иначе используем стандартный заголовок
+                self.session.headers.update({
+                    'X-Leeloo-AuthToken': settings.api_secret,
+                })
+            self.auth_token = settings.api_secret
+            self.api_key = settings.api_key
+            self.api_secret = settings.api_secret
         
         logger.info(f"LILUClient initialized for {self.base_url}")
     
@@ -231,12 +256,17 @@ class LILUClient:
         """
         url = self._build_url(self._format_endpoint(endpoint, **kwargs))
         
-        logger.debug(f"GET {url} with params: {params}")
+        # Добавляем authToken в параметры запроса (требуется LILU API)
+        request_params = params.copy() if params else {}
+        if self.auth_token:
+            request_params['authToken'] = self.auth_token
+        
+        logger.debug(f"GET {url} with params: {list(request_params.keys())}")
         
         try:
             response = self.session.get(
                 url,
-                params=params,
+                params=request_params,
                 timeout=self.settings.timeout
             )
             return self._handle_response(response)

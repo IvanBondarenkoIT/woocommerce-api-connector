@@ -36,11 +36,11 @@ class AuthenticationError(LILUAPIError):
     """
     Ошибка аутентификации.
     
-    Возникает при неправильных API ключах (401 или 403 статус).
-    Обычно означает, что LILU_API_KEY или LILU_API_SECRET неверны.
+    Возникает при неправильном API токене (401 или 403 статус).
+    Обычно означает, что LILU_API_TOKEN неверен или истёк.
     
     Пример:
-        >>> raise AuthenticationError("Invalid API key")
+        >>> raise AuthenticationError("Invalid API token")
     """
     def __init__(self, message: str = "Authentication failed"):
         self.message = message

@@ -121,17 +121,39 @@ class LILUConnector:
         """
         try:
             endpoint = ENDPOINTS['clients']
+            # Для LILU API используем offset и limit вместо page
+            # offset = (page - 1) * limit
+            offset = (page - 1) * limit
+            
             params = {
-                'page': page,
-                'limit': limit
+                'limit': limit,
+                'offset': offset
             }
             
             if status:
                 params['status'] = status
             
-            logger.debug(f"Fetching clients: page={page}, limit={limit}, status={status}")
+            logger.debug(f"Fetching clients: page={page}, limit={limit}, offset={offset}, status={status}")
             response = self.client.get(endpoint, params=params)
             data = response.json()
+            
+            # LILU API возвращает данные в формате {data: [...], meta: {...}, status: 1}
+            if isinstance(data, dict):
+                if 'data' in data:
+                    data_obj = data['data']
+                    # Если data - это список (стандартный формат LILU)
+                    if isinstance(data_obj, list):
+                        data = data_obj
+                    # Если data содержит people (альтернативный формат)
+                    elif isinstance(data_obj, dict) and 'people' in data_obj:
+                        people_list = data_obj['people']
+                        data = people_list if isinstance(people_list, list) else [people_list]
+                    # Если data - это объект (один человек)
+                    else:
+                        data = [data_obj] if data_obj else []
+                elif 'people' in data:
+                    people_list = data['people']
+                    data = people_list if isinstance(people_list, list) else [people_list]
             
             # Преобразуем список словарей в список ClientModel
             # Для Junior: list comprehension - это способ создать список
@@ -139,7 +161,7 @@ class LILUConnector:
             # clients = []
             # for item in data:
             #     clients.append(ClientModel.from_dict(item))
-            clients = [ClientModel.from_dict(item) for item in data]
+            clients = [ClientModel.from_dict(item) for item in data] if isinstance(data, list) else []
             
             logger.info(f"Retrieved {len(clients)} clients")
             return clients
@@ -230,6 +252,10 @@ class LILUConnector:
             
             response = self.client.post(endpoint, json=client_data)
             data = response.json()
+            
+            # LILU API возвращает данные в формате {data: {...}, status: 1}
+            if isinstance(data, dict) and 'data' in data:
+                data = data['data']
             
             client = ClientModel.from_dict(data)
             logger.info(f"Created client: {client.name} (ID: {client.id})")
@@ -424,6 +450,99 @@ class LILUConnector:
         except Exception as e:
             logger.warning(f"Health check failed: {e}")
             return False
+    
+    def get_template_categories(self) -> List[Dict[str, Any]]:
+        """
+        Получить список категорий шаблонов сообщений.
+        
+        Args:
+            None
+        
+        Returns:
+            List[Dict[str, Any]]: Список категорий шаблонов
+        
+        Пример:
+            >>> connector = LILUConnector()
+            >>> categories = connector.get_template_categories()
+            >>> for category in categories:
+            ...     print(category['name'])
+        """
+        try:
+            endpoint = ENDPOINTS['template_categories']
+            logger.debug("Fetching template categories")
+            
+            response = self.client.get(endpoint)
+            data = response.json()
+            
+            # Логируем сырой ответ для отладки
+            logger.debug(f"Raw response: {type(data)}, keys: {list(data.keys()) if isinstance(data, dict) else 'N/A'}")
+            
+            # Проверяем, не является ли ответ ошибкой
+            if isinstance(data, dict) and 'error' in data:
+                error_msg = data.get('error', 'Unknown error')
+                status = data.get('status', 'Unknown')
+                logger.error(f"API returned error: status={status}, error={error_msg}")
+                raise LILUAPIError(f"API error: {error_msg} (status: {status})")
+            
+            # Если ответ - список, проверяем структуру
+            if isinstance(data, list):
+                # Если первый элемент содержит 'categories', извлекаем их
+                if data and len(data) > 0 and isinstance(data[0], dict) and 'categories' in data[0]:
+                    categories = data[0]['categories']
+                    if isinstance(categories, list):
+                        logger.info(f"Retrieved {len(categories)} template categories")
+                        return categories
+                    else:
+                        logger.info(f"Retrieved 1 template category")
+                        return [categories] if categories else []
+                else:
+                    logger.info(f"Retrieved {len(data)} template categories")
+                    return data
+            # Если ответ - объект с данными
+            elif isinstance(data, dict):
+                # Проверяем различные возможные ключи
+                if 'data' in data:
+                    data_obj = data['data']
+                    # Если data содержит categories
+                    if isinstance(data_obj, dict) and 'categories' in data_obj:
+                        categories = data_obj['categories']
+                        if isinstance(categories, list):
+                            logger.info(f"Retrieved {len(categories)} template categories")
+                            return categories
+                        else:
+                            return [categories] if categories else []
+                    # Если data - это список
+                    elif isinstance(data_obj, list):
+                        logger.info(f"Retrieved {len(data_obj)} template categories")
+                        return data_obj
+                    # Если data - это объект (одна категория)
+                    else:
+                        logger.info(f"Retrieved 1 template category")
+                        return [data_obj] if data_obj else []
+                elif 'categories' in data:
+                    categories = data['categories']
+                    if isinstance(categories, list):
+                        logger.info(f"Retrieved {len(categories)} template categories")
+                        return categories
+                    else:
+                        logger.info(f"Retrieved 1 template category")
+                        return [categories] if categories else []
+                elif 'results' in data:
+                    categories = data['results']
+                    logger.info(f"Retrieved {len(categories)} template categories")
+                    return categories if isinstance(categories, list) else [categories]
+                else:
+                    # Возможно, сам объект и есть категория, или это другой формат
+                    logger.warning(f"Unexpected response format. Keys: {list(data.keys())}")
+                    # Возвращаем весь объект как список из одного элемента для анализа
+                    return [data]
+            else:
+                logger.warning(f"Unexpected response type: {type(data)}")
+                return []
+        
+        except Exception as e:
+            logger.error(f"Error while fetching template categories: {e}")
+            raise LILUAPIError(f"Failed to fetch template categories: {e}")
     
     def close(self):
         """

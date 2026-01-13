@@ -48,11 +48,13 @@ class ClientModel:
         John Doe
     """
     
-    id: int
+    id: str  # В LILU API id - это строка
     name: str
-    email: str
-    phone: Optional[str] = None
-    status: str = "active"
+    email: Optional[str] = None  # Может быть "NOT_DEFINED"
+    phone: Optional[str] = None  # Может быть "NOT_DEFINED"
+    tags: List[str] = field(default_factory=list)  # Теги клиента
+    accounts: List[Dict[str, Any]] = field(default_factory=list)  # Аккаунты клиента
+    last_message_time: Optional[str] = None  # Время последнего сообщения
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -84,14 +86,25 @@ class ClientModel:
             >>> print(client.name)
             John Doe
         """
+        # Обрабатываем "NOT_DEFINED" как None
+        email = data.get('email')
+        if email == 'NOT_DEFINED' or not email:
+            email = None
+        
+        phone = data.get('phone')
+        if phone == 'NOT_DEFINED' or not phone:
+            phone = None
+        
         return cls(
-            id=data.get('id', 0),
+            id=str(data.get('id', '')),
             name=data.get('name', ''),
-            email=data.get('email', ''),
-            phone=data.get('phone'),
-            status=data.get('status', 'active'),
-            created_at=data.get('created_at'),
-            updated_at=data.get('updated_at'),
+            email=email,
+            phone=phone,
+            tags=data.get('tags', []),
+            accounts=data.get('accounts', []),
+            last_message_time=data.get('lastMessageTime') or data.get('last_message_time'),
+            created_at=data.get('createdAt') or data.get('created_at'),
+            updated_at=data.get('updatedAt') or data.get('updated_at'),
             metadata=data.get('metadata', {})
         )
     
@@ -111,15 +124,18 @@ class ClientModel:
             >>> # Отправить data в API
         """
         result = {
-            'id': self.id,
             'name': self.name,
-            'email': self.email,
-            'status': self.status,
         }
         
         # Добавляем опциональные поля, если они есть
+        if self.email:
+            result['email'] = self.email
+        
         if self.phone:
             result['phone'] = self.phone
+        
+        if self.tags:
+            result['tags'] = self.tags
         
         if self.metadata:
             result['metadata'] = self.metadata
@@ -151,15 +167,25 @@ class ClientModel:
         Вместо метода is_active(), мы можем использовать client.is_active
         (без скобок).
         
+        В LILU API клиент считается активным, если у него есть аккаунты
+        с connection_status = "OK".
+        
         Returns:
             bool: True, если клиент активен
         
         Пример:
-            >>> client = ClientModel(id=1, name='John', email='john@example.com', status='active')
+            >>> client = ClientModel(id="123", name='John', email='john@example.com')
             >>> if client.is_active:
             ...     print("Клиент активен")
         """
-        return self.status == 'active'
+        # Проверяем, есть ли аккаунты с OK статусом
+        if self.accounts:
+            return any(
+                account.get('connection_status') == 'OK' 
+                for account in self.accounts
+            )
+        # Если нет аккаунтов, считаем активным если есть имя
+        return bool(self.name)
     
     @property
     def display_name(self) -> str:
@@ -167,11 +193,17 @@ class ClientModel:
         Получить отображаемое имя клиента.
         
         Returns:
-            str: Имя клиента или email, если имя пустое
+            str: Имя клиента, email, phone или ID, если ничего нет
         
         Пример:
-            >>> client = ClientModel(id=1, name='', email='john@example.com')
+            >>> client = ClientModel(id="123", name='', email='john@example.com')
             >>> print(client.display_name)
             john@example.com
         """
-        return self.name if self.name else self.email
+        if self.name:
+            return self.name
+        if self.email and self.email != 'NOT_DEFINED':
+            return self.email
+        if self.phone and self.phone != 'NOT_DEFINED':
+            return self.phone
+        return self.id

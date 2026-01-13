@@ -19,7 +19,7 @@
 API_VERSION = "v2"
 
 # Базовый URL API (будет переопределён из .env)
-BASE_URL = "https://api.servus-ululu.com"
+BASE_URL = "https://api.leeloo.ai"
 
 # Таймаут для HTTP запросов (в секундах)
 REQUEST_TIMEOUT = 30
@@ -31,28 +31,37 @@ MAX_RETRIES = 3
 RETRY_DELAY = 1
 
 # Endpoints API
-# Для Junior: endpoint - это адрес, по которому мы обращаемся к API
-# Например: https://api.servus-ululu.com/api/v2/clients
+# Для Junior: endpoint - это путь относительно base_url
+# base_url уже содержит /api/v2, поэтому endpoints начинаются без /api/v2
+# Например: base_url = https://api.servus-ululu.com/api/v2, endpoint = /clients
+# Результат: https://api.servus-ululu.com/api/v2/clients
 ENDPOINTS = {
-    # Клиенты
-    'clients': '/api/v2/clients',
-    'client': '/api/v2/clients/{client_id}',  # {client_id} будет заменён на реальный ID
+    # Клиенты (подписчики) - в LILU API называются "people"
+    'clients': '/people',  # Получить список подписчиков
+    'client': '/people/{client_id}',  # Получить конкретного подписчика
+    'people': '/people',  # Альтернативное название
+    'person': '/people/{client_id}',  # Альтернативное название
     
     # Продукты
-    'products': '/api/v2/products',
-    'product': '/api/v2/products/{product_id}',
+    'products': '/products',
+    'product': '/products/{product_id}',
     
     # Заказы
-    'orders': '/api/v2/orders',
-    'order': '/api/v2/orders/{order_id}',
+    'orders': '/orders',
+    'order': '/orders/{order_id}',
     
     # Аутентификация
-    'auth': '/api/v2/auth',
-    'refresh_token': '/api/v2/auth/refresh',
+    'auth': '/auth',
+    'refresh_token': '/auth/refresh',
     
     # Статус API
-    'health': '/api/v2/health',
-    'status': '/api/v2/status',
+    'health': '/health',
+    'status': '/status',
+    
+    # Шаблоны сообщений
+    'template_categories': '/categories/templates',
+    'templates': '/templates',
+    'template': '/templates/{template_id}',
 }
 
 # HTTP заголовки по умолчанию
