@@ -13,13 +13,13 @@
 from .product import Product
 from .category import Category
 
-# Для будущих фич
-# from .order import Order
-# from .customer import Customer
+# Модели для будущих фич (готовы к использованию, но пока не используются)
+from .order import Order
+from .customer import Customer
 
 __all__ = [
     "Product",
     "Category",
-    # "Order",
-    # "Customer",
+    "Order",  # Готово для Этапа 5 (работа с заказами)
+    "Customer",  # Готово для Этапа 5 (работа с клиентами)
 ]
