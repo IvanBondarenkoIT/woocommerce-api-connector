@@ -419,6 +419,159 @@ class WooCommerceConnector:
             logger.warning("Could not determine working API version")
             return None
     
+    def get_orders(self, per_page: int = 10, page: int = 1, status: Optional[str] = None) -> Optional[Any]:
+        """
+        Получить заказы из WooCommerce магазина.
+        
+        Args:
+            per_page: Количество заказов на странице (по умолчанию 10)
+            page: Номер страницы (по умолчанию 1)
+            status: Фильтр по статусу заказа (опционально)
+                   Например: 'pending', 'processing', 'completed', 'cancelled'
+        
+        Returns:
+            Response объект с заказами или None в случае ошибки
+        
+        Raises:
+            APIResponseError: При ошибке API запроса
+            NetworkError: При проблемах с сетью
+        
+        Example:
+            >>> response = connector.get_orders(per_page=20, page=1, status='completed')
+            >>> if response and response.status_code == 200:
+            ...     orders = response.json()
+        """
+        try:
+            params = {
+                'per_page': per_page,
+                'page': page
+            }
+            if status:
+                params['status'] = status
+            
+            logger.debug(f"Fetching orders: page={page}, per_page={per_page}, status={status}")
+            response = self.wcapi.get('orders', params=params)
+            
+            if response.status_code != 200:
+                error_msg = f"API Error: Status {response.status_code}"
+                logger.error(f"{error_msg} - Response: {response.text}")
+                
+                # Определяем тип ошибки по статусу
+                if response.status_code == 401:
+                    raise AuthenticationError("Invalid API credentials")
+                elif response.status_code == 404:
+                    raise NotFoundError("Orders endpoint")
+                else:
+                    raise APIResponseError(
+                        response.status_code,
+                        error_msg,
+                        response.text
+                    )
+            
+            logger.debug(f"Successfully fetched {len(response.json())} orders from page {page}")
+            return response
+            
+        except (AuthenticationError, NotFoundError, APIResponseError):
+            raise  # Пробрасываем наши исключения дальше
+        except Exception as e:
+            logger.error(f"Error fetching orders: {e}", exc_info=True)
+            raise NetworkError(f"Network error while fetching orders: {e}")
+    
+    def get_all_orders(self, per_page: int = 100, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Получить ВСЕ заказы из WooCommerce магазина с пагинацией.
+        
+        Автоматически обрабатывает пагинацию и загружает все страницы заказов.
+        
+        Args:
+            per_page: Количество заказов на странице (по умолчанию 100, максимум рекомендуется)
+            status: Фильтр по статусу заказа (опционально)
+        
+        Returns:
+            Список всех заказов
+        
+        Raises:
+            APIResponseError: При ошибке API запроса
+            NetworkError: При проблемах с сетью
+        
+        Example:
+            >>> all_orders = connector.get_all_orders(status='completed')
+            >>> print(f"Total orders: {len(all_orders)}")
+        """
+        all_orders = []
+        page = 1
+        
+        logger.info(f"Starting to fetch all orders (per_page={per_page}, status={status})")
+        
+        while True:
+            try:
+                response = self.get_orders(per_page=per_page, page=page, status=status)
+                
+                if not response or response.status_code != 200:
+                    logger.warning(f"Failed to fetch page {page}, stopping pagination")
+                    break
+                
+                orders = response.json()
+                
+                if not orders:
+                    logger.debug(f"No orders on page {page}, stopping pagination")
+                    break
+                
+                all_orders.extend(orders)
+                logger.debug(f"Fetched page {page}: {len(orders)} orders (total: {len(all_orders)})")
+                
+                # Проверяем есть ли еще страницы
+                if len(orders) < per_page:
+                    logger.debug("Last page reached")
+                    break
+                
+                page += 1
+                
+            except (AuthenticationError, NotFoundError, APIResponseError, NetworkError):
+                # Пробрасываем наши исключения
+                raise
+            except Exception as e:
+                logger.error(f"Error fetching page {page}: {e}", exc_info=True)
+                raise NetworkError(f"Error during pagination: {e}")
+        
+        logger.info(f"Successfully fetched {len(all_orders)} orders from {page} page(s)")
+        return all_orders
+    
+    def get_order_by_id(self, order_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Получить заказ по ID.
+        
+        Args:
+            order_id: ID заказа
+        
+        Returns:
+            Словарь с данными заказа или None в случае ошибки
+        
+        Raises:
+            NotFoundError: Если заказ не найден
+            APIResponseError: При ошибке API запроса
+        """
+        try:
+            logger.debug(f"Fetching order with ID: {order_id}")
+            response = self.wcapi.get(f'orders/{order_id}')
+            
+            if response.status_code == 200:
+                order = response.json()
+                logger.debug(f"Successfully fetched order: {order.get('id', 'Unknown')}")
+                return order
+            elif response.status_code == 404:
+                raise NotFoundError("Order", str(order_id))
+            else:
+                error_msg = f"Error: {response.status_code} - {response.text}"
+                logger.error(error_msg)
+                raise APIResponseError(response.status_code, error_msg, response.text)
+                
+        except (NotFoundError, APIResponseError):
+            raise
+        except Exception as e:
+            logger.error(f"Error fetching order: {e}", exc_info=True)
+            raise NetworkError(f"Error fetching order: {e}")
+    
     def get_store_info(self) -> Optional[Dict[str, Any]]:
         """
         Получить информацию о WooCommerce магазине.
