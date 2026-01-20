@@ -93,6 +93,41 @@ class WooCommerceConnector:
                 timeout=config.timeout,
                 query_string_auth=config.query_string_auth
             )
+            
+            # Устанавливаем User-Agent для обхода бот-защиты (Imunify360 и т.д.)
+            # Библиотека woocommerce использует requests.Session под капотом
+            if config.user_agent:
+                try:
+                    # Пробуем получить доступ к сессии requests
+                    if hasattr(self.wcapi, 'session'):
+                        self.wcapi.session.headers.update({
+                            'User-Agent': config.user_agent
+                        })
+                        logger.debug(f"User-Agent установлен через session: {config.user_agent[:50]}...")
+                    elif hasattr(self.wcapi, '_session'):
+                        self.wcapi._session.headers.update({
+                            'User-Agent': config.user_agent
+                        })
+                        logger.debug(f"User-Agent установлен через _session: {config.user_agent[:50]}...")
+                    else:
+                        # Если нет прямого доступа, используем monkey-patching для requests
+                        import requests
+                        if not hasattr(requests.Session, '_woocommerce_ua_patched'):
+                            original_request = requests.Session.request
+                            
+                            def patched_request(self, method, url, **kwargs):
+                                if 'headers' not in kwargs:
+                                    kwargs['headers'] = {}
+                                if 'User-Agent' not in kwargs['headers']:
+                                    kwargs['headers']['User-Agent'] = config.user_agent
+                                return original_request(self, method, url, **kwargs)
+                            
+                            requests.Session.request = patched_request
+                            requests.Session._woocommerce_ua_patched = True
+                            logger.debug(f"User-Agent установлен через monkey-patch: {config.user_agent[:50]}...")
+                except Exception as e:
+                    logger.warning(f"Не удалось установить User-Agent: {e}")
+            
             logger.info("WooCommerce API client initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize WooCommerce API: {e}", exc_info=True)
