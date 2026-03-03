@@ -26,10 +26,11 @@
 
 ## Файлы деплоя
 
-- `Procfile` — команда запуска
-- `railway.json` — конфиг Railway
-- `nixpacks.toml` — сборка (Python, без GUI-зависимостей)
-- `requirements-railway.txt` — зависимости для веб-приложения (без customtkinter)
+- `Dockerfile` — сборка (python:3.11-slim)
+- `railway.json` — конфиг (builder: DOCKERFILE)
+- `requirements-railway.txt` — зависимости (без customtkinter)
+
+Если Railway всё ещё использует Nixpacks: Settings → Build → Builder → **Dockerfile**.
 
 ## Локальная проверка
 
