@@ -36,6 +36,7 @@ Thumbs.db
 
 # Data output files (можно добавить в git для примера, но большие файлы лучше игнорировать)
 data/output/*.json
+data/sync_tracker.json
 data/output/*.csv
 data/output/*.xlsx
 !data/output/.gitkeep
