@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Заказ #{{ order_id }} - WooCommerce → LILU Sync{% endblock %}
+
+{% block content %}
+<div class="order-detail-page">
+    <div class="page-header">
+        <a href="/" class="back-link">← Назад к списку</a>
+        <h2>Заказ #{{ order_id }}</h2>
+    </div>
+
+    <div id="order-detail" class="order-detail">
+        <div class="loading">Загрузка деталей заказа...</div>
+    </div>
+</div>
+
+<div id="notification" class="notification hidden"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const orderId = {{ order_id }};
+
+    // Загрузка деталей заказа
+    async function loadOrderDetail() {
+        const container = document.getElementById('order-detail');
+        
+        try {
+            const response = await fetch(`/api/orders/${orderId}`);
+            const order = await response.json();
+
+            container.innerHTML = `
+                <div class="order-info">
+                    <div class="info-section">
+                        <h3>Информация о заказе</h3>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>ID:</label>
+                                <span>#${order.id}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Дата:</label>
+                                <span>${formatDate(order.date)}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Статус:</label>
+                                <span class="status-badge status-${order.status}">${order.status}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Сумма:</label>
+                                <span><strong>${order.total} ${order.currency || 'GEL'}</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="info-section">
+                        <h3>Информация о клиенте</h3>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>Имя:</label>
+                                <span>${order.customer.name || '-'}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Телефон:</label>
+                                <span>${order.customer.phone || '-'}</span>
+                            </div>
+                            <div class="info-item">
+                                <label>Email:</label>
+                                <span>${order.customer.email || '-'}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="info-section">
+                        <h3>Статус синхронизации</h3>
+                        <div class="sync-info">
+                            ${getSyncInfoHTML(order.sync_status)}
+                        </div>
+                        ${!order.sync_status.synced 
+                            ? `<button onclick="syncOrder(${order.id})" class="btn btn-primary btn-large">🔄 Синхронизировать в LILU</button>`
+                            : `<button onclick="deleteFromLilu(${order.id})" class="btn btn-outline-danger" title="Удалить клиента из LILU">Удалить из LILU</button>`
+                        }
+                    </div>
+
+                    <div class="info-section">
+                        <h3>Товары в заказе</h3>
+                        <div class="items-list">
+                            ${order.items.map(item => `
+                                <div class="item-row">
+                                    <span class="item-name">${item.name}</span>
+                                    <span class="item-quantity">x${item.quantity}</span>
+                                    <span class="item-price">${item.total} ${order.currency || 'GEL'}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+        } catch (error) {
+            console.error('Error loading order detail:', error);
+            container.innerHTML = '<div class="error">Ошибка загрузки деталей заказа</div>';
+        }
+    }
+
+    function getSyncInfoHTML(syncStatus) {
+        if (!syncStatus.synced) {
+            return '<p class="sync-status not-synced">⚪ Заказ не синхронизирован</p>';
+        }
+
+        return `
+            <p class="sync-status synced">✅ Заказ синхронизирован</p>
+            <div class="sync-details">
+                <p><strong>Клиент в LILU:</strong> ${syncStatus.display_id || syncStatus.lilu_client_id || syncStatus.client_identifier || '-'}</p>
+                <p><strong>Статус:</strong> ${syncStatus.status}</p>
+                <p><strong>Дата синхронизации:</strong> ${formatDate(syncStatus.synced_at)}</p>
+                ${syncStatus.tags_added && syncStatus.tags_added.length > 0
+                    ? `<p><strong>Теги:</strong> ${syncStatus.tags_added.join(', ')}</p>`
+                    : ''
+                }
+            </div>
+        `;
+    }
+
+    async function syncOrder(orderId) {
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳ Синхронизация...';
+
+        try {
+            const response = await fetch(`/api/orders/${orderId}/sync`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(result.message, 'success');
+                // Перезагружаем детали заказа
+                loadOrderDetail();
+            } else {
+                showNotification(result.message || result.error_message, 'error');
+            }
+
+        } catch (error) {
+            console.error('Error syncing order:', error);
+            showNotification('Ошибка синхронизации заказа', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    async function deleteFromLilu(orderId) {
+        if (!confirm('Удалить клиента из LILU и отменить синхронизацию этого заказа?')) return;
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '...';
+
+        try {
+            const response = await fetch(`/api/orders/${orderId}/unsync`, { method: 'POST' });
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(result.message, 'success');
+                loadOrderDetail();
+            } else {
+                showNotification(result.message || 'Ошибка', 'error');
+            }
+        } catch (error) {
+            console.error('Error unsyncing order:', error);
+            showNotification('Ошибка при удалении из LILU', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
+    function formatDate(dateString) {
+        if (!dateString) return '-';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ru-RU') + ' ' + date.toLocaleTimeString('ru-RU');
+    }
+
+    function showNotification(message, type = 'info') {
+        const notification = document.getElementById('notification');
+        notification.textContent = message;
+        notification.className = `notification ${type}`;
+        notification.classList.remove('hidden');
+        
+        setTimeout(() => {
+            notification.classList.add('hidden');
+        }, 5000);
+    }
+
+    // Загрузка при старте
+    document.addEventListener('DOMContentLoaded', () => {
+        loadOrderDetail();
+    });
+</script>
+{% endblock %}

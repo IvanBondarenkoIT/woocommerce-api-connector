@@ -85,48 +85,19 @@ class WooCommerceConnector:
         
         # Initialize WooCommerce API
         try:
+            # User-Agent для обхода Imunify360 (документация: user_agent в конструктор API)
+            # Важно: взять актуальный UA из браузера (F12 → Network → Request Headers)
+            user_agent = config.user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
             self.wcapi = API(
                 url=self.url,
                 consumer_key=self.consumer_key,
                 consumer_secret=self.consumer_secret,
                 version=self.api_version,
                 timeout=config.timeout,
-                query_string_auth=config.query_string_auth
+                query_string_auth=config.query_string_auth,
+                user_agent=user_agent,
             )
-            
-            # Устанавливаем User-Agent для обхода бот-защиты (Imunify360 и т.д.)
-            # Библиотека woocommerce использует requests.Session под капотом
-            if config.user_agent:
-                try:
-                    # Пробуем получить доступ к сессии requests
-                    if hasattr(self.wcapi, 'session'):
-                        self.wcapi.session.headers.update({
-                            'User-Agent': config.user_agent
-                        })
-                        logger.debug(f"User-Agent установлен через session: {config.user_agent[:50]}...")
-                    elif hasattr(self.wcapi, '_session'):
-                        self.wcapi._session.headers.update({
-                            'User-Agent': config.user_agent
-                        })
-                        logger.debug(f"User-Agent установлен через _session: {config.user_agent[:50]}...")
-                    else:
-                        # Если нет прямого доступа, используем monkey-patching для requests
-                        import requests
-                        if not hasattr(requests.Session, '_woocommerce_ua_patched'):
-                            original_request = requests.Session.request
-                            
-                            def patched_request(self, method, url, **kwargs):
-                                if 'headers' not in kwargs:
-                                    kwargs['headers'] = {}
-                                if 'User-Agent' not in kwargs['headers']:
-                                    kwargs['headers']['User-Agent'] = config.user_agent
-                                return original_request(self, method, url, **kwargs)
-                            
-                            requests.Session.request = patched_request
-                            requests.Session._woocommerce_ua_patched = True
-                            logger.debug(f"User-Agent установлен через monkey-patch: {config.user_agent[:50]}...")
-                except Exception as e:
-                    logger.warning(f"Не удалось установить User-Agent: {e}")
+            logger.debug(f"User-Agent установлен для Imunify360: {user_agent[:50]}...")
             
             logger.info("WooCommerce API client initialized successfully")
         except Exception as e:
@@ -407,14 +378,16 @@ class WooCommerceConnector:
                 logger.debug(f"Testing API version: {version}")
                 print(f"\nTesting version: {version}...", end=" ")
                 
-                # Создаем временный API экземпляр с этой версией
+                # Создаем временный API экземпляр с этой версией (user_agent для Imunify360)
+                user_agent = self.config.user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 test_api = API(
                     url=self.url,
                     consumer_key=self.consumer_key,
                     consumer_secret=self.consumer_secret,
                     version=version,
                     timeout=10,
-                    query_string_auth=True
+                    query_string_auth=True,
+                    user_agent=user_agent,
                 )
                 
                 # Пробуем получить system_status или products
@@ -667,13 +640,15 @@ def check_api_version_standalone() -> Optional[str]:
             logger.debug(f"Testing version: {version}")
             print(f"Testing version: {version:10} ... ", end="")
             
+            user_agent = config.user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             test_api = API(
                 url=config.url,
                 consumer_key=config.consumer_key,
                 consumer_secret=config.consumer_secret,
                 version=version,
                 timeout=10,
-                query_string_auth=True
+                query_string_auth=True,
+                user_agent=user_agent,
             )
             
             # Пробуем products endpoint (самый распространенный)

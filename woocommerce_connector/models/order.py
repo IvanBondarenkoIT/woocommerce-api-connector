@@ -112,6 +112,20 @@ class Order:
         Returns:
             Order: Объект заказа
         """
+        if not isinstance(data, dict):
+            data = {}
+
+        def _ensure_dict(v, default=None):
+            return v if isinstance(v, dict) else (default or {})
+
+        def _ensure_list_of_dicts(v):
+            if not isinstance(v, list):
+                return []
+            return [x for x in v if isinstance(x, dict)]
+
+        billing_raw = data.get('billing', {})
+        shipping_raw = data.get('shipping', {})
+
         return cls(
             id=data.get('id', 0),
             status=data.get('status', 'pending'),
@@ -127,18 +141,18 @@ class Order:
             total_tax=data.get('total_tax', '0'),
             customer_id=data.get('customer_id', 0),
             customer_note=data.get('customer_note', ''),
-            billing=data.get('billing', {}),
-            shipping=data.get('shipping', {}),
+            billing=_ensure_dict(billing_raw),
+            shipping=_ensure_dict(shipping_raw),
             payment_method=data.get('payment_method', ''),
             payment_method_title=data.get('payment_method_title', ''),
             transaction_id=data.get('transaction_id', ''),
-            line_items=data.get('line_items', []),
-            tax_lines=data.get('tax_lines', []),
-            shipping_lines=data.get('shipping_lines', []),
-            fee_lines=data.get('fee_lines', []),
-            coupon_lines=data.get('coupon_lines', []),
-            refunds=data.get('refunds', []),
-            meta_data=data.get('meta_data', []),
+            line_items=_ensure_list_of_dicts(data.get('line_items', [])),
+            tax_lines=_ensure_list_of_dicts(data.get('tax_lines', [])),
+            shipping_lines=_ensure_list_of_dicts(data.get('shipping_lines', [])),
+            fee_lines=_ensure_list_of_dicts(data.get('fee_lines', [])),
+            coupon_lines=_ensure_list_of_dicts(data.get('coupon_lines', [])),
+            refunds=_ensure_list_of_dicts(data.get('refunds', [])),
+            meta_data=_ensure_list_of_dicts(data.get('meta_data', [])),
         )
     
     def to_dict(self) -> dict:

@@ -1,4 +1,24 @@
-# ✅ Успешная интеграция LILU API Connector
+# ✅ Успешные результаты проекта
+
+---
+
+## Imunify360: обход без whitelist (27.01.2026)
+
+### Проблема
+Ошибка при доступе к WooCommerce API: `Access denied by Imunify360 bot-protection`.
+
+### Решение (работает без whitelist)
+Добавить в `.env`:
+```env
+WC_USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36
+```
+Рекомендуется скопировать User-Agent из браузера (dimkava.ge → F12 → Network → Request Headers).
+
+**Документ:** [docs/guides/IMUNIFY360_QUICK_FIX.md](docs/guides/IMUNIFY360_QUICK_FIX.md)
+
+---
+
+## LILU API Connector
 
 ## 🎉 Дата: 2026-01-13
 

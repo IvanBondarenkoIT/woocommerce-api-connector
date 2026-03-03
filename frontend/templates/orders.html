@@ -1,0 +1,586 @@
+{% extends "base.html" %}
+
+{% block title %}Заказы - WooCommerce → LILU Sync{% endblock %}
+
+{% block content %}
+<div class="orders-page">
+    <div class="page-header">
+        <h2>Заказы WooCommerce</h2>
+        <div class="actions">
+            <button id="refresh-btn" class="btn btn-primary">🔄 Обновить</button>
+        </div>
+    </div>
+
+    <div class="filters">
+        <input type="text" id="search-input" placeholder="Поиск по ID, имени или email..." class="search-input">
+        <select id="status-filter" class="filter-select">
+            <option value="">Все статусы</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+        </select>
+        <select id="coupon-filter" class="filter-select">
+            <option value="">Все купоны</option>
+            <option value="-15%">Купон -15% (первый заказ)</option>
+        </select>
+        <select id="per-page" class="filter-select" title="Заказов на странице">
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+        </select>
+        <button id="apply-filters" class="btn btn-secondary">Применить</button>
+    </div>
+
+    <div class="stats-bar">
+        <span id="total-orders">Загрузка...</span>
+        <span id="sync-stats">Загрузка...</span>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-spinner"></div>
+        <p id="loading-text" class="loading-text">Загрузка заказов...</p>
+        <p class="loading-hint">При медленной загрузке используйте «Быстрая загрузка»</p>
+    </div>
+
+    <div class="table-container">
+        <table id="orders-table" class="orders-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Дата</th>
+                    <th>Клиент</th>
+                    <th>Телефон</th>
+                    <th>Email</th>
+                    <th>Сумма</th>
+                    <th>Купоны</th>
+                    <th>Группы товаров</th>
+                    <th>Статус</th>
+                    <th>Синхронизация</th>
+                    <th>Действия</th>
+                </tr>
+            </thead>
+            <tbody id="orders-tbody">
+                <tr>
+                    <td colspan="11" class="loading">Загрузка заказов...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="pagination">
+        <button id="prev-page" class="btn btn-secondary" disabled>← Назад</button>
+        <span id="page-info">Страница 1</span>
+        <button id="next-page" class="btn btn-secondary">Вперед →</button>
+    </div>
+</div>
+
+<div id="notification" class="notification hidden"></div>
+
+<!-- Модальное окно для деталей заказа -->
+<div id="order-details-modal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Детали заказа #<span id="modal-order-id"></span></h2>
+            <button class="modal-close" onclick="closeOrderDetails()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="order-details-content" class="loading">Загрузка...</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Глобальные переменные
+    let currentPage = 1;
+    let currentStatus = '';
+    let currentSearch = '';
+    let currentCouponCode = '';
+    let currentPerPage = 20;
+    let cachedOrders = [];  // Кеш заказов — обновляем строку при sync вместо полной перезагрузки
+
+    // Показать/скрыть индикатор загрузки
+    function showLoading(text) {
+        const overlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
+        loadingText.textContent = text || 'Загрузка...';
+        overlay.classList.remove('hidden');
+        document.getElementById('orders-table').classList.add('loading-dimmed');
+    }
+    function hideLoading() {
+        document.getElementById('loading-overlay').classList.add('hidden');
+        document.getElementById('orders-table').classList.remove('loading-dimmed');
+    }
+
+    // Таймаут загрузки (секунды)
+    const FETCH_TIMEOUT_MS = 90000;
+
+    // Загрузка заказов
+    async function loadOrders(page = 1, status = '', search = '', couponCode = '', perPage = 20, loadProductGroups = false) {
+        const tbody = document.getElementById('orders-tbody');
+        tbody.innerHTML = '<tr><td colspan="11" class="loading"><span class="loading-dots">Загрузка заказов</span></td></tr>';
+        showLoading(loadProductGroups ? 'Загрузка заказов и групп товаров...' : 'Загрузка заказов...');
+        setFiltersEnabled(false);
+
+        try {
+            const params = new URLSearchParams({
+                page: page.toString(),
+                per_page: perPage.toString(),
+                load_product_groups: loadProductGroups ? '1' : '0'
+            });
+            if (status) params.append('status', status);
+            if (search) params.append('search', search);
+            if (couponCode) params.append('coupon_code', couponCode);
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+            const response = await fetch(`/api/orders?${params}`, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            const data = await response.json();
+
+            if (!response.ok) {
+                const msg = data.detail || data.message || `HTTP ${response.status}`;
+                throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+            }
+            const ordersList = Array.isArray(data.orders) ? data.orders : [];
+            data.orders = ordersList;
+
+            // Обновляем статистику
+            const totalText = data.has_more
+                ? `Показано: ${data.orders.length} (есть ещё)`
+                : `Показано: ${data.orders.length} заказов`;
+            document.getElementById('total-orders').textContent = totalText;
+            updateSyncStats();
+
+            // Отрисовываем заказы
+            if (data.orders.length === 0) {
+                cachedOrders = [];
+                tbody.innerHTML = '<tr><td colspan="11" class="empty">Заказы не найдены</td></tr>';
+                return;
+            }
+
+            cachedOrders = data.orders;
+            tbody.innerHTML = data.orders.map(order => `
+                <tr data-order-id="${order.id}">
+                    <td><a href="/orders/${order.id}">#${order.id}</a></td>
+                    <td>${formatDate(order.date)}</td>
+                    <td>${order.customer_name || '-'}</td>
+                    <td>${order.customer_phone || '-'}</td>
+                    <td>${order.customer_email || '-'}</td>
+                    <td>${order.total} ${order.currency || 'GEL'}</td>
+                    <td><span class="coupon-cell">${(order.coupon_codes || []).join(', ') || '-'}</span></td>
+                    <td><span class="groups-cell" title="${(order.product_groups || []).join(', ')}">${(order.product_groups || []).slice(0, 2).join(', ') || '-'}${(order.product_groups || []).length > 2 ? '...' : ''}</span></td>
+                    <td><span class="status-badge status-${order.status}">${order.status}</span></td>
+                    <td>${getSyncStatusBadge(order.sync_status, order.display_id || order.lilu_client_id)}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button onclick="showOrderDetails(${order.id})" class="btn btn-sm btn-secondary" title="Показать все атрибуты заказа">Детали</button>
+                            ${order.sync_status === 'not_synced' || !order.sync_status
+                                ? `<button onclick="syncOrder(${order.id})" class="btn btn-sm btn-primary">Синхронизировать</button>`
+                                : `<span class="text-muted">Синхронизирован</span> <button onclick="deleteFromLilu(${order.id})" class="btn btn-sm btn-outline-danger ms-1" title="Удалить клиента из LILU">Удалить</button>`
+                            }
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Обновляем пагинацию
+            updatePagination(page, data.has_more);
+            currentPage = page;
+
+        } catch (error) {
+            console.error('Error loading orders:', error);
+            let errMsg = error.message || 'Ошибка загрузки заказов';
+            if (error.name === 'AbortError') {
+                errMsg = 'Таймаут загрузки (90 сек). Попробуйте «Быстрая загрузка» без групп товаров.';
+            }
+            tbody.innerHTML = `<tr><td colspan="11" class="error">${errMsg}
+                <br><button onclick="loadOrders(currentPage, currentStatus, currentSearch, currentCouponCode, currentPerPage, false)" class="btn btn-sm btn-secondary mt-1">Быстрая загрузка (без групп)</button>
+            </td></tr>`;
+            showNotification(errMsg, 'error');
+        } finally {
+            hideLoading();
+            setFiltersEnabled(true);
+        }
+    }
+
+    function setFiltersEnabled(enabled) {
+        const els = ['apply-filters', 'refresh-btn', 'prev-page', 'next-page'];
+        els.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = !enabled;
+        });
+        ['search-input', 'status-filter', 'coupon-filter', 'per-page'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = !enabled;
+        });
+    }
+
+    // Синхронизация заказа — без перезагрузки всего списка, обновляем только строку
+    async function syncOrder(orderId) {
+        const btn = event.target;
+        const row = btn.closest('tr');
+        const originalHtml = row ? row.innerHTML : null;
+        let synced = false;
+        btn.disabled = true;
+        btn.textContent = '...';
+
+        try {
+            const response = await fetch(`/api/orders/${orderId}/sync`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                synced = true;
+                showNotification(result.message, 'success');
+                updateOrderRowAfterSync(orderId, result);
+                updateSyncStats();
+            } else {
+                showNotification(result.message || result.error_message, 'error');
+                if (row && originalHtml) row.innerHTML = originalHtml;
+            }
+
+        } catch (error) {
+            console.error('Error syncing order:', error);
+            showNotification('Ошибка синхронизации заказа', 'error');
+            if (row && originalHtml) row.innerHTML = originalHtml;
+        } finally {
+            if (row && !synced) {
+                const b = row.querySelector('button[onclick*="syncOrder"]');
+                if (b) { b.disabled = false; b.textContent = 'Синхронизировать'; }
+            }
+        }
+    }
+
+    // Обновить строку заказа после успешной синхронизации (без перезагрузки)
+    function updateOrderRowAfterSync(orderId, result) {
+        const order = cachedOrders.find(o => o.id === orderId);
+        if (!order) return;
+
+        order.sync_status = result.action;
+        order.lilu_client_id = result.display_id || result.lilu_client_id;
+        order.display_id = result.display_id;
+
+        const row = document.querySelector(`tr[data-order-id="${orderId}"]`);
+        if (!row) return;
+
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 11) {
+            cells[9].innerHTML = getSyncStatusBadge(result.action, result.display_id);   // Синхронизация
+            cells[10].innerHTML = '<div class="action-buttons"><span class="text-muted">Синхронизирован</span> <button onclick="deleteFromLilu(' + orderId + ')" class="btn btn-sm btn-outline-danger ms-1" title="Удалить клиента из LILU">Удалить</button></div>';  // Действия
+        }
+    }
+
+    // Удаление клиента из LILU (отмена синхронизации)
+    async function deleteFromLilu(orderId) {
+        if (!confirm('Удалить клиента из LILU и отменить синхронизацию этого заказа?')) return;
+        const row = document.querySelector(`tr[data-order-id="${orderId}"]`);
+        const originalHtml = row ? row.innerHTML : null;
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '...';
+
+        try {
+            const response = await fetch(`/api/orders/${orderId}/unsync`, { method: 'POST' });
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(result.message, 'success');
+                updateOrderRowAfterUnsync(orderId);
+                updateSyncStats();
+            } else {
+                showNotification(result.message || 'Ошибка', 'error');
+                if (row && originalHtml) row.innerHTML = originalHtml;
+            }
+        } catch (error) {
+            console.error('Error unsyncing order:', error);
+            showNotification('Ошибка при удалении из LILU', 'error');
+            if (row && originalHtml) row.innerHTML = originalHtml;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Удалить';
+        }
+    }
+
+    function updateOrderRowAfterUnsync(orderId) {
+        const order = cachedOrders.find(o => o.id === orderId);
+        if (!order) return;
+
+        order.sync_status = 'not_synced';
+        order.lilu_client_id = null;
+        order.display_id = null;
+
+        const row = document.querySelector(`tr[data-order-id="${orderId}"]`);
+        if (!row) return;
+
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 11) {
+            cells[9].innerHTML = getSyncStatusBadge('not_synced', null);
+            cells[10].innerHTML = '<div class="action-buttons"><button onclick="syncOrder(' + orderId + ')" class="btn btn-sm btn-primary">Синхронизировать</button></div>';
+        }
+    }
+
+    // Обновление статистики синхронизации
+    async function updateSyncStats() {
+        try {
+            const response = await fetch('/api/sync/status');
+            const stats = await response.json();
+            const tracker = stats.tracker || {};
+            document.getElementById('sync-stats').textContent = 
+                `Синхронизировано: ${tracker.total_processed || 0} (Создано: ${tracker.created || 0}, Обновлено: ${tracker.updated || 0})`;
+        } catch (error) {
+            console.error('Error loading sync stats:', error);
+        }
+    }
+
+    // Вспомогательные функции
+    function formatDate(dateString) {
+        if (!dateString) return '-';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ru-RU') + ' ' + date.toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
+    }
+
+    function getSyncStatusBadge(status, liluClientId) {
+        const badges = {
+            'created': '<span class="sync-badge synced">✅ Синхронизирован</span>',
+            'updated': '<span class="sync-badge synced">✅ Обновлен</span>',
+            'skipped': '<span class="sync-badge skipped">⚠️ Пропущен</span>',
+            'error': '<span class="sync-badge error">❌ Ошибка</span>',
+            'not_synced': '<span class="sync-badge not-synced">⚪ Не синхронизирован</span>'
+        };
+        return badges[status] || badges['not_synced'];
+    }
+
+    function updatePagination(page, hasMore) {
+        document.getElementById('page-info').textContent = `Страница ${page}`;
+        document.getElementById('prev-page').disabled = page <= 1;
+        document.getElementById('next-page').disabled = !hasMore;
+    }
+
+    function showNotification(message, type = 'info') {
+        const notification = document.getElementById('notification');
+        notification.textContent = message;
+        notification.className = `notification ${type}`;
+        notification.classList.remove('hidden');
+        
+        setTimeout(() => {
+            notification.classList.add('hidden');
+        }, 5000);
+    }
+
+    // Обработчики событий
+    document.getElementById('refresh-btn').addEventListener('click', () => {
+        loadOrders(currentPage, currentStatus, currentSearch, currentCouponCode, currentPerPage);
+    });
+
+    document.getElementById('apply-filters').addEventListener('click', () => {
+        currentStatus = document.getElementById('status-filter').value;
+        currentSearch = document.getElementById('search-input').value;
+        currentCouponCode = document.getElementById('coupon-filter').value;
+        currentPerPage = parseInt(document.getElementById('per-page').value, 10);
+        currentPage = 1;
+        loadOrders(currentPage, currentStatus, currentSearch, currentCouponCode, currentPerPage);
+    });
+
+    document.getElementById('prev-page').addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            loadOrders(currentPage, currentStatus, currentSearch, currentCouponCode, currentPerPage);
+        }
+    });
+
+    document.getElementById('next-page').addEventListener('click', () => {
+        if (!document.getElementById('next-page').disabled) {
+            currentPage++;
+            loadOrders(currentPage, currentStatus, currentSearch, currentCouponCode, currentPerPage);
+        }
+    });
+
+    // Показать детали заказа
+    async function showOrderDetails(orderId) {
+        const modal = document.getElementById('order-details-modal');
+        const content = document.getElementById('order-details-content');
+        const orderIdSpan = document.getElementById('modal-order-id');
+        
+        modal.classList.remove('hidden');
+        orderIdSpan.textContent = orderId;
+        content.innerHTML = '<div class="loading"><span class="loading-dots">Загрузка деталей заказа</span></div>';
+        
+        try {
+            const response = await fetch(`/api/orders/${orderId}`);
+            const order = await response.json();
+            
+            content.innerHTML = formatOrderDetails(order);
+        } catch (error) {
+            console.error('Error loading order details:', error);
+            content.innerHTML = '<div class="error">Ошибка загрузки деталей заказа</div>';
+        }
+    }
+    
+    // Закрыть модальное окно
+    function closeOrderDetails() {
+        document.getElementById('order-details-modal').classList.add('hidden');
+    }
+    
+    // Форматирование деталей заказа
+    function formatOrderDetails(order) {
+        return `
+            <div class="order-details">
+                <!-- Основная информация -->
+                <div class="details-section">
+                    <h3>Основная информация</h3>
+                    <div class="details-grid">
+                        <div class="detail-item"><label>ID:</label><span>#${order.id}</span></div>
+                        <div class="detail-item"><label>Статус:</label><span class="status-badge status-${order.status}">${order.status}</span></div>
+                        <div class="detail-item"><label>Дата создания:</label><span>${formatDate(order.date)}</span></div>
+                        <div class="detail-item"><label>Валюта:</label><span>${order.currency || 'GEL'}</span></div>
+                        <div class="detail-item"><label>Сумма:</label><span><strong>${order.total} ${order.currency || 'GEL'}</strong></span></div>
+                        <div class="detail-item"><label>Скидка:</label><span>${order.discount_total || '0'} ${order.currency || 'GEL'}</span></div>
+                        <div class="detail-item"><label>Доставка:</label><span>${order.shipping_total || '0'} ${order.currency || 'GEL'}</span></div>
+                        <div class="detail-item"><label>Налог:</label><span>${order.total_tax || '0'} ${order.currency || 'GEL'}</span></div>
+                    </div>
+                </div>
+                
+                <!-- Клиент -->
+                <div class="details-section">
+                    <h3>Информация о клиенте</h3>
+                    <div class="details-grid">
+                        <div class="detail-item"><label>ID клиента:</label><span>${order.customer_id || '-'}</span></div>
+                        <div class="detail-item"><label>Имя:</label><span>${order.customer.name || '-'}</span></div>
+                        <div class="detail-item"><label>Телефон:</label><span>${order.customer.phone || '-'}</span></div>
+                        <div class="detail-item"><label>Email:</label><span>${order.customer.email || '-'}</span></div>
+                        <div class="detail-item"><label>Примечание:</label><span>${order.customer_note || '-'}</span></div>
+                    </div>
+                </div>
+                
+                <!-- Адрес для выставления счета -->
+                ${order.billing ? `
+                <div class="details-section">
+                    <h3>Адрес для выставления счета</h3>
+                    <div class="details-grid">
+                        ${order.billing.first_name ? `<div class="detail-item"><label>Имя:</label><span>${order.billing.first_name}</span></div>` : ''}
+                        ${order.billing.last_name ? `<div class="detail-item"><label>Фамилия:</label><span>${order.billing.last_name}</span></div>` : ''}
+                        ${order.billing.company ? `<div class="detail-item"><label>Компания:</label><span>${order.billing.company}</span></div>` : ''}
+                        ${order.billing.address_1 ? `<div class="detail-item"><label>Адрес:</label><span>${order.billing.address_1}</span></div>` : ''}
+                        ${order.billing.address_2 ? `<div class="detail-item"><label>Адрес 2:</label><span>${order.billing.address_2}</span></div>` : ''}
+                        ${order.billing.city ? `<div class="detail-item"><label>Город:</label><span>${order.billing.city}</span></div>` : ''}
+                        ${order.billing.state ? `<div class="detail-item"><label>Регион:</label><span>${order.billing.state}</span></div>` : ''}
+                        ${order.billing.postcode ? `<div class="detail-item"><label>Индекс:</label><span>${order.billing.postcode}</span></div>` : ''}
+                        ${order.billing.country ? `<div class="detail-item"><label>Страна:</label><span>${order.billing.country}</span></div>` : ''}
+                    </div>
+                </div>
+                ` : ''}
+                
+                <!-- Адрес доставки -->
+                ${order.shipping ? `
+                <div class="details-section">
+                    <h3>Адрес доставки</h3>
+                    <div class="details-grid">
+                        ${order.shipping.first_name ? `<div class="detail-item"><label>Имя:</label><span>${order.shipping.first_name}</span></div>` : ''}
+                        ${order.shipping.last_name ? `<div class="detail-item"><label>Фамилия:</label><span>${order.shipping.last_name}</span></div>` : ''}
+                        ${order.shipping.company ? `<div class="detail-item"><label>Компания:</label><span>${order.shipping.company}</span></div>` : ''}
+                        ${order.shipping.address_1 ? `<div class="detail-item"><label>Адрес:</label><span>${order.shipping.address_1}</span></div>` : ''}
+                        ${order.shipping.address_2 ? `<div class="detail-item"><label>Адрес 2:</label><span>${order.shipping.address_2}</span></div>` : ''}
+                        ${order.shipping.city ? `<div class="detail-item"><label>Город:</label><span>${order.shipping.city}</span></div>` : ''}
+                        ${order.shipping.state ? `<div class="detail-item"><label>Регион:</label><span>${order.shipping.state}</span></div>` : ''}
+                        ${order.shipping.postcode ? `<div class="detail-item"><label>Индекс:</label><span>${order.shipping.postcode}</span></div>` : ''}
+                        ${order.shipping.country ? `<div class="detail-item"><label>Страна:</label><span>${order.shipping.country}</span></div>` : ''}
+                    </div>
+                </div>
+                ` : ''}
+                
+                <!-- Оплата -->
+                <div class="details-section">
+                    <h3>Оплата</h3>
+                    <div class="details-grid">
+                        <div class="detail-item"><label>Способ оплаты:</label><span>${order.payment_method || '-'}</span></div>
+                        <div class="detail-item"><label>Название способа:</label><span>${order.payment_method_title || '-'}</span></div>
+                        <div class="detail-item"><label>ID транзакции:</label><span>${order.transaction_id || '-'}</span></div>
+                    </div>
+                </div>
+                
+                <!-- Группы товаров (категории) -->
+                ${order.product_categories && order.product_categories.length > 0 ? `
+                <div class="details-section">
+                    <h3>Группы товаров</h3>
+                    <p class="help-text">Категории товаров в заказе (для маппинга на теги LILU)</p>
+                    <div class="categories-tags">
+                        ${order.product_categories.map(c => `
+                            <span class="category-tag" title="ID: ${c.id}, slug: ${c.slug}">${c.name}</span>
+                        `).join('')}
+                    </div>
+                    <div class="category-slugs"><small>slug: ${order.product_categories.map(c => c.slug).join(', ')}</small></div>
+                </div>
+                ` : ''}
+                
+                <!-- Товары -->
+                ${order.items && order.items.length > 0 ? `
+                <div class="details-section">
+                    <h3>Товары (${order.items.length})</h3>
+                    <div class="items-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Название</th>
+                                    <th>Количество</th>
+                                    <th>Цена</th>
+                                    <th>Сумма</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${order.items.map(item => `
+                                    <tr>
+                                        <td>${item.name || '-'}</td>
+                                        <td>${item.quantity || 0}</td>
+                                        <td>${item.price || '0'} ${order.currency || 'GEL'}</td>
+                                        <td><strong>${item.total || '0'} ${order.currency || 'GEL'}</strong></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                ` : ''}
+                
+                <!-- Дополнительные данные (JSON) -->
+                <div class="details-section">
+                    <h3>Все данные заказа (JSON)</h3>
+                    <div class="json-viewer">
+                        <pre><code>${JSON.stringify(order, null, 2)}</code></pre>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Закрытие модального окна при клике вне его
+    document.addEventListener('click', (e) => {
+        const modal = document.getElementById('order-details-modal');
+        if (e.target === modal) {
+            closeOrderDetails();
+        }
+    });
+    
+    // Закрытие по Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeOrderDetails();
+        }
+    });
+
+    // Загрузка при старте
+    document.addEventListener('DOMContentLoaded', () => {
+        currentPerPage = parseInt(document.getElementById('per-page').value, 10);
+        loadOrders(1, '', '', '', currentPerPage);
+        updateSyncStats();
+    });
+</script>
+{% endblock %}

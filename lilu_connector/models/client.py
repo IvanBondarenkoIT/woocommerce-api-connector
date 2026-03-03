@@ -94,9 +94,19 @@ class ClientModel:
         phone = data.get('phone')
         if phone == 'NOT_DEFINED' or not phone:
             phone = None
+
+        # LILU API может возвращать id под разными ключами
+        raw_id = (
+            data.get('id') or
+            data.get('_id') or
+            data.get('personId') or
+            data.get('person_id') or
+            ''
+        )
+        client_id = str(raw_id).strip() if raw_id is not None else ''
         
         return cls(
-            id=str(data.get('id', '')),
+            id=client_id,
             name=data.get('name', ''),
             email=email,
             phone=phone,
