@@ -15,6 +15,7 @@
 
 - **[API_CONNECTION_GUIDE.md](docs/guides/API_CONNECTION_GUIDE.md)** - Руководство по подключению к WooCommerce API
 - **[IMUNIFY360_GUIDE.md](docs/guides/IMUNIFY360_GUIDE.md)** - Полное руководство по решению проблемы Imunify360
+- **[IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md](docs/guides/IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md)** - Обход Imunify360 без whitelist IP (User-Agent)
 
 ## 💻 Разработка (docs/development/)
 
@@ -45,11 +46,14 @@
 Старые версии документации перемещены в папку `archive/`:
 - `archive/IMUNIFY360_SOLUTION_OLD.md` - Старая версия (объединена в IMUNIFY360_GUIDE.md)
 - `archive/IMUNIFY360_WHITELIST_GUIDE_OLD.md` - Старая версия (объединена в IMUNIFY360_GUIDE.md)
+- `archive/IMUNIFY360_DEBUG_REPORT_OLD.md` - Отчёт с неверными выводами (решение — WC_USER_AGENT)
 
 ## Быстрый доступ
 
 ### Решение проблем
-- **Imunify360 блокирует запросы?** → [docs/guides/IMUNIFY360_GUIDE.md](docs/guides/IMUNIFY360_GUIDE.md)
+- **Imunify360 блокирует — быстрое решение** → [docs/guides/IMUNIFY360_QUICK_FIX.md](docs/guides/IMUNIFY360_QUICK_FIX.md)
+- **Imunify360 подробно** → [docs/guides/IMUNIFY360_GUIDE.md](docs/guides/IMUNIFY360_GUIDE.md)
+- **Imunify360 без whitelist (User-Agent)** → [docs/guides/IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md](docs/guides/IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md)
 - **Не могу подключиться к API?** → [docs/guides/API_CONNECTION_GUIDE.md](docs/guides/API_CONNECTION_GUIDE.md)
 - **Нужен промпт для другого проекта?** → [docs/prompts/WOOCOMMERCE_PRODUCT_STOCK_PROMPT.md](docs/prompts/WOOCOMMERCE_PRODUCT_STOCK_PROMPT.md)
 

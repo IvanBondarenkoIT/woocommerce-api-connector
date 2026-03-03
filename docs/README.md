@@ -7,7 +7,9 @@
 ### 📖 [Руководства](guides/)
 Практические руководства по использованию проекта:
 - [API_CONNECTION_GUIDE.md](guides/API_CONNECTION_GUIDE.md) - Подключение к WooCommerce API
+- [IMUNIFY360_QUICK_FIX.md](guides/IMUNIFY360_QUICK_FIX.md) - **Imunify360 — быстрое решение** (WC_USER_AGENT)
 - [IMUNIFY360_GUIDE.md](guides/IMUNIFY360_GUIDE.md) - Решение проблемы Imunify360
+- [IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md](guides/IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md) - Обход Imunify360 без whitelist (User-Agent)
 
 ### 🚀 [Развертывание](deployment/)
 Документация по развертыванию и настройке:
@@ -38,4 +40,5 @@
 - **Начало работы** → [README.md](../README.md)
 - **Подключение к API** → [guides/API_CONNECTION_GUIDE.md](guides/API_CONNECTION_GUIDE.md)
 - **Проблема Imunify360** → [guides/IMUNIFY360_GUIDE.md](guides/IMUNIFY360_GUIDE.md)
+- **Imunify360 без whitelist** → [guides/IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md](guides/IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md)
 - **Промпт для другого проекта** → [prompts/WOOCOMMERCE_PRODUCT_STOCK_PROMPT.md](prompts/WOOCOMMERCE_PRODUCT_STOCK_PROMPT.md)
