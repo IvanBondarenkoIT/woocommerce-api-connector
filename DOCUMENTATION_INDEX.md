@@ -27,6 +27,7 @@
 
 ## 🚀 Развертывание (docs/deployment/)
 
+- **[RAILWAY_DEPLOY.md](docs/deployment/RAILWAY_DEPLOY.md)** - Деплой на Railway
 - **[DEPLOY.md](docs/deployment/DEPLOY.md)** - Руководство по развертыванию
 - **[GITHUB_SETUP.md](docs/deployment/GITHUB_SETUP.md)** - Настройка GitHub
 
