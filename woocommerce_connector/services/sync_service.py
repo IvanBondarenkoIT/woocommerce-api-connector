@@ -5,6 +5,7 @@
 в CRM LILU: поиск клиентов по телефону, создание новых клиентов, обновление тегов.
 """
 
+import re
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -19,6 +20,22 @@ from .sync_tracker import SyncTracker
 from woocommerce_connector.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _sanitize_phone_for_lilu(phone: Optional[str]) -> str:
+    """
+    Привести телефон к формату E.164 для LILU: только + и цифры, 10–15 знаков.
+    LILU отклоняет NOT_VALID_PHONE_NUMBER при пробелах, дефисах и т.п.
+    """
+    if not phone:
+        return ""
+    s = str(phone).strip()
+    digits = re.sub(r"[^\d]", "", s)
+    if not digits:
+        return s
+    if s.startswith("+"):
+        return f"+{digits}"
+    return f"+{digits}"
 
 
 @dataclass
@@ -148,22 +165,32 @@ class SyncService:
                 # Клиент найден - обновляем теги если нужно
                 logger.info(f"Found existing client in LILU: {existing_client.name} (ID: {existing_client.id})")
                 
-                # Проверяем, нужно ли обновить теги
-                current_tags = set(existing_client.tags or [])
+                # Нормализуем теги: LILU может возвращать строки или объекты {id, name}
+                def _tag_name(t):
+                    return (t.get("name", t) if isinstance(t, dict) else t)
+                current_tag_names = {str(_tag_name(t)).strip().lower() for t in (existing_client.tags or [])}
+                current_tags = current_tag_names
                 new_tags = set(tags)
                 
-                if not new_tags.issubset(current_tags):
-                    # Есть новые теги - обновляем
-                    tags_to_add = list(new_tags - current_tags)
-                    updated_tags = list(current_tags | new_tags)
-                    
+                # Добавляем описание заказа как комментарий (всегда при update)
+                order_summary = self.order_processor.format_order_summary_for_message(
+                    order, customer_data
+                )
+                try:
+                    self.lilu_connector.add_client_comment(existing_client.id, order_summary)
+                except Exception as e:
+                    logger.warning(f"Could not add comment to client {existing_client.id}: {e}")
+
+                new_tag_names = {str(t).strip().lower() for t in tags}
+                tags_to_add = [t for t in tags if str(t).strip().lower() not in current_tags]
+                if tags_to_add:
                     try:
                         updated_client = self.lilu_connector.update_client_tags(
                             client_id=existing_client.id,
-                            tags=updated_tags,
+                            tags=tags,
                             merge=True
                         )
-                        
+
                         result = SyncResult(
                             order_id=order_id,
                             success=True,
@@ -202,7 +229,7 @@ class SyncService:
                         )
                         return result
                 else:
-                    # Теги уже актуальны
+                    # Теги уже актуальны (комментарий уже добавлен выше)
                     result = SyncResult(
                         order_id=order_id,
                         success=True,
@@ -224,21 +251,46 @@ class SyncService:
             else:
                 # Клиент не найден - создаем нового
                 logger.info(f"Client not found in LILU, creating new client for phone: {customer_data.phone}")
-                
-                # Идентификатор для отображения, когда LILU не вернул id
-                fallback_id = customer_data.email or customer_data.name or customer_data.phone
-                client_data = {
-                    'name': customer_data.name or customer_data.phone,
-                    'phone': customer_data.phone,
-                    'tags': tags
+
+                # LILU POST /people принимает только name, email, phone (формат E.164: +digits)
+                name = customer_data.name or customer_data.phone
+                phone = _sanitize_phone_for_lilu(customer_data.phone)
+                email = customer_data.email
+                if not email:
+                    email = f"woo-order-{order.id}@import.placeholder"
+
+                client_data: Dict[str, Any] = {
+                    "name": name,
+                    "phone": phone,
+                    "email": email,
                 }
-                if customer_data.email:
-                    client_data['email'] = customer_data.email
 
                 try:
                     new_client = self.lilu_connector.create_client(client_data)
                     lid = new_client.id if new_client.id else None
 
+                    # Добавляем тег "api woo" через add-tag (LILU не принимает tags в create)
+                    if lid and tags:
+                        try:
+                            self.lilu_connector.update_client_tags(
+                                client_id=lid,
+                                tags=tags,
+                                merge=True
+                            )
+                        except Exception as tag_err:
+                            logger.warning(f"Could not add tags to new client {lid}: {tag_err}")
+
+                    # Добавляем описание заказа как комментарий
+                    order_summary = self.order_processor.format_order_summary_for_message(
+                        order, customer_data
+                    )
+                    if lid and order_summary:
+                        try:
+                            self.lilu_connector.add_client_comment(lid, order_summary)
+                        except Exception as comment_err:
+                            logger.warning(f"Could not add comment to new client {lid}: {comment_err}")
+
+                    fallback_id = customer_data.email or customer_data.name or customer_data.phone
                     result = SyncResult(
                         order_id=order_id,
                         success=True,

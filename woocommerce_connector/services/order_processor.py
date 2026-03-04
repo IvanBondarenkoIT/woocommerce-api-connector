@@ -134,7 +134,57 @@ class OrderProcessor:
         
         logger.debug(f"Determined tags for order {order.id}: {tags}")
         return tags
-    
+
+    def format_order_products(self, order: Order) -> str:
+        """
+        Форматировать перечень товаров заказа для отображения/комментария.
+
+        Args:
+            order: Заказ WooCommerce
+
+        Returns:
+            Строка вида "Товар 1 x2, Товар 2 x1" или пустая строка
+        """
+        if not order.line_items:
+            return ""
+        parts = []
+        for item in order.line_items:
+            name = item.get("name", "—")
+            qty = item.get("quantity", 1)
+            if isinstance(qty, (int, float)):
+                parts.append(f"{name} x{int(qty)}")
+            else:
+                parts.append(str(name))
+        return ", ".join(parts)
+
+    def format_order_summary_for_message(
+        self, order: Order, customer_data: Optional[CustomerData] = None
+    ) -> str:
+        """
+        Форматировать полное описание заказа для стартового сообщения в переписку.
+
+        Args:
+            order: Заказ WooCommerce
+            customer_data: Данные клиента (опционально)
+
+        Returns:
+            Текст сообщения с информацией о заказе
+        """
+        from datetime import datetime
+
+        lines = [
+            f"Заказ WooCommerce #{order.id}",
+            f"Дата: {order.date_created or '—'}",
+            f"Сумма: {order.total} {order.currency}",
+            f"Статус: {order.status}",
+        ]
+        products = self.format_order_products(order)
+        if products:
+            lines.append(f"Товары: {products}")
+        if customer_data and customer_data.order_id:
+            lines.append(f"Телефон клиента: {customer_data.phone}")
+        return "\n".join(lines)
+
     def _check_condition(self, order: Order, condition: Dict[str, Any]) -> bool:
         """
         Проверить условие для определения тега.

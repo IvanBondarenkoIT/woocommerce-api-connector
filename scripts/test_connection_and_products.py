@@ -6,13 +6,17 @@
 1. Проверяет подключение к WooCommerce API
 2. Получает весь список товаров с пагинацией
 3. Выводит информацию о товарах
-4. Помогает диагностировать проблемы с подключением
+4. (опционально) Запускает localhost, делает запрос /api/orders, слушает ошибки
 
 Использование:
     python scripts/test_connection_and_products.py
+    python scripts/test_connection_and_products.py --with-frontend
 """
 
 import sys
+import subprocess
+import time
+import signal
 from pathlib import Path
 
 # Добавляем корневую директорию проекта в путь
@@ -77,9 +81,12 @@ def test_connection():
             response = connector.get_products(per_page=10, page=1)
             if response and response.status_code == 200:
                 products = response.json()
+                if not isinstance(products, list):
+                    products = products.get("products", []) if isinstance(products, dict) else []
                 print(f"   ✓ Успешно получено {len(products)} товаров")
                 if products:
-                    print(f"   ✓ Пример товара: {products[0].get('name', 'N/A')}")
+                    first = products[0] if isinstance(products[0], dict) else {}
+                    print(f"   ✓ Пример товара: {first.get('name', 'N/A')}")
             else:
                 print(f"   ✗ Ошибка: Status {response.status_code if response else 'No response'}")
                 return False
@@ -191,10 +198,136 @@ def show_api_details():
         print(f"Ошибка: {e}")
 
 
+def _wait_for_server(url: str, timeout: float = 30) -> bool:
+    """Ждёт готовности сервера."""
+    try:
+        import urllib.request
+        for _ in range(int(timeout)):
+            try:
+                urllib.request.urlopen(url, timeout=2)
+                return True
+            except Exception:
+                time.sleep(1)
+    except Exception:
+        pass
+    return False
+
+
+def test_localhost_with_errors() -> bool:
+    """Запускает frontend на localhost:8001, дергает /api/orders, слушает ошибки."""
+    import urllib.request
+    import urllib.error
+    import json
+
+    print()
+    print("=" * 80)
+    print("5. ТЕСТ LOCALHOST (frontend + /api/orders)")
+    print("=" * 80)
+    print()
+
+    port = 8001  # 8001 чтобы не конфликтовать с уже запущенным
+    url_base = f"http://127.0.0.1:{port}"
+    proc = None
+    server_log: list[str] = []
+
+    try:
+        env = __import__("os").environ.copy()
+        env["PYTHONPATH"] = str(project_root)
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "frontend.app:app", "--host", "127.0.0.1", "--port", str(port)],
+            cwd=str(project_root),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=env,
+        )
+
+        if not _wait_for_server(f"{url_base}/api/health", timeout=20):
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.terminate()
+            out, _ = proc.communicate(timeout=5)
+            server_log = (out or "").splitlines()
+            print("   ✗ Сервер не стартовал за 20 сек")
+            if server_log:
+                print("   Вывод сервера (последние строки):")
+                for line in server_log[-15:]:
+                    print(f"     {line}")
+            return False
+
+        print("   ✓ Сервер запущен")
+
+        req = urllib.request.Request(f"{url_base}/api/orders?per_page=5")
+        req.add_header("Accept", "application/json")
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode())
+            orders = data.get("orders", data) if isinstance(data, dict) else data
+            cnt = len(orders) if isinstance(orders, list) else 0
+            print(f"   ✓ GET /api/orders: {resp.status} {cnt} заказов")
+            if isinstance(data, dict) and data.get("error"):
+                print(f"   ⚠ Ошибка в ответе: {data.get('error')}")
+                return False
+        return True
+
+    except urllib.error.HTTPError as e:
+        body = ""
+        try:
+            body = e.read().decode()
+        except Exception:
+            pass
+        print(f"   ✗ HTTP {e.code}: {e.reason}")
+        if body:
+            try:
+                err = json.loads(body)
+                detail = err.get("detail", body[:200])
+                print(f"   detail: {detail}")
+            except Exception:
+                print(f"   body: {body[:300]}")
+        return False
+    except Exception as e:
+        print(f"   ✗ Ошибка: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        if proc and proc.poll() is None:
+            proc.terminate()
+            try:
+                out, _ = proc.communicate(timeout=5)
+                server_log = (out or "").splitlines()
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                try:
+                    out, _ = proc.communicate(timeout=2)
+                    server_log = (out or "").splitlines()
+                except Exception:
+                    server_log = []
+
+        if server_log:
+            errors = [ln for ln in server_log if "error" in ln.lower() or "traceback" in ln.lower() or "exception" in ln.lower()]
+            if errors:
+                print()
+                print("   Ошибки в логах сервера:")
+                for line in errors[-20:]:
+                    print(f"     {line}")
+
+
 if __name__ == "__main__":
-    success = test_connection()
-    
-    if success:
+    with_frontend = "--with-frontend" in sys.argv
+    api_ok = test_connection()
+
+    if api_ok:
         show_api_details()
-    
+
+    if with_frontend:
+        print()
+        frontend_ok = test_localhost_with_errors()
+        success = api_ok and frontend_ok
+    else:
+        success = api_ok
+        if api_ok:
+            print()
+            print("Подсказка: добавьте --with-frontend для проверки localhost + /api/orders")
+
     sys.exit(0 if success else 1)

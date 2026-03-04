@@ -184,7 +184,7 @@ def main():
                 }
             }
         ]
-        
+
         sync_service = SyncService(
             wc_connector=wc_connector,
             lilu_connector=lilu_connector,

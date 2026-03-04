@@ -5,6 +5,7 @@
 """
 
 import os
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
 from dotenv import load_dotenv
@@ -17,8 +18,10 @@ from .constants import (
 )
 from ..api.exceptions import ConfigurationError
 
-# Загружаем переменные окружения
-load_dotenv()
+# Загружаем .env из корня проекта (надёжно при любом cwd)
+_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(_env_path)
+load_dotenv()  # fallback: cwd
 
 
 @dataclass
@@ -56,6 +59,7 @@ class WooCommerceConfig:
     timeout: int = 30
     query_string_auth: bool = True
     user_agent: Optional[str] = None  # User-Agent для обхода бот-защиты
+    https_proxy: Optional[str] = None  # Прокси для WooCommerce (datacenter egress → обход Imunify360)
     
     @classmethod
     def from_env(cls) -> 'WooCommerceConfig':
@@ -94,7 +98,10 @@ class WooCommerceConfig:
         
         # User-Agent из переменной окружения или по умолчанию (актуальный Chrome для Imunify360)
         user_agent = os.getenv('WC_USER_AGENT', 
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36')
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36')
+        
+        # Прокси для обхода Imunify360 с residential IP (WC_HTTPS_PROXY или HTTPS_PROXY)
+        https_proxy = os.getenv('WC_HTTPS_PROXY') or os.getenv('HTTPS_PROXY')
         
         return cls(
             url=url,
@@ -103,6 +110,7 @@ class WooCommerceConfig:
             api_version=api_version,
             timeout=timeout,
             user_agent=user_agent,
+            https_proxy=https_proxy,
         )
     
     def validate(self) -> None:

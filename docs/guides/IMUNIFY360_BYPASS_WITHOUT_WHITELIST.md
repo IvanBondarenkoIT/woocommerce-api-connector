@@ -1,5 +1,7 @@
 # Обход Imunify360 без whitelist IP
 
+> **Главное правило:** [IMUNIFY360_MAIN_RULE.md](IMUNIFY360_MAIN_RULE.md)
+
 ## Проблема
 
 Ошибка при доступе к WooCommerce API:
@@ -45,6 +47,15 @@ headers = {
 ```
 
 User-Agent берётся только из `self.user_agent`, который задаётся в `__init__` через `kwargs.get("user_agent", ...)`.
+
+---
+
+## Патч с полными браузерными заголовками
+
+В дополнение к User-Agent применяется `patch_api_with_browser_headers()` из `woocommerce_connector/api/imunify_client.py`:
+
+- Добавляет: `Accept-Language`, `Referer`, `sec-ch-ua`, `sec-fetch-*`
+- **Важно:** версия Chrome в `sec-ch-ua` берётся из User-Agent — несовпадение может вызвать блокировку
 
 ---
 
@@ -101,9 +112,9 @@ WC_USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 
 ## Если всё равно блокируют
 
-- User-Agent **не гарантирует** обход, Imunify360 может учитывать и другие признаки.
-- Для стабильной работы рекомендуется **whitelist IP** (см. [IMUNIFY360_GUIDE.md](IMUNIFY360_GUIDE.md)).
-- Можно попробовать более «свежий» User-Agent Chrome.
+- User-Agent **не гарантирует** обход, Imunify360 может учитывать и другие признаки (IP, fingerprint).
+- Убедитесь, что `WC_USER_AGENT` и версия Chrome в нём совпадают с вашим браузером.
+- На residential IP может блокировать чаще, чем на datacenter (Railway).
 
 ---
 

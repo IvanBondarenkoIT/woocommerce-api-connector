@@ -62,6 +62,14 @@ ENDPOINTS = {
     'template_categories': '/categories/templates',
     'templates': '/templates',
     'template': '/templates/{template_id}',
+
+    # Теги (LILU использует tag_id для add-tag/remove-tag)
+    'tags': '/tags',
+    'add_tag': '/people/{client_id}/add-tag',
+    'remove_tag': '/people/{client_id}/remove-tag',
+
+    # Комментарий к подписчику
+    'add_comment': '/people/{client_id}/add-comment',
 }
 
 # HTTP заголовки по умолчанию

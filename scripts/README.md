@@ -25,6 +25,10 @@
 - **[check_specific_orders.py](check_specific_orders.py)** - Проверка конкретных заказов
 - **[show_recent_orders.py](show_recent_orders.py)** - Показать недавние заказы
 
+### LILU (синхронизация)
+- **[test_lilu_client.py](test_lilu_client.py)** - Тест создания/удаления клиентов в LILU (без WooCommerce)
+- **[sync_orders.py](sync_orders.py)** - Синхронизация заказов WooCommerce → LILU
+
 ## Утилиты
 
 - **[get_my_ip.py](get_my_ip.py)** - Получить ваш публичный IP адрес (для whitelist Imunify360)
@@ -45,6 +49,15 @@ python scripts/test_connection_and_products.py
 
 # Получить IP адрес
 python scripts/get_my_ip.py
+
+# Тест LILU: создать и удалить тестового клиента
+python scripts/test_lilu_client.py create --delete-after
+
+# Тест LILU: создать клиента с Georgian телефоном
+python scripts/test_lilu_client.py create --phone +995544445523
+
+# Тест LILU: удалить клиента по ID
+python scripts/test_lilu_client.py delete --id <lilu_client_id>
 ```
 
 ## Требования

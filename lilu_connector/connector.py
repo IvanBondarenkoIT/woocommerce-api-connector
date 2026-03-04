@@ -280,14 +280,21 @@ class LILUConnector:
             
             response = self.client.post(endpoint, json=client_data)
             raw = response.json()
+
+            if isinstance(raw, dict) and raw.get('status') == 0:
+                err = raw.get('error', {})
+                err_msg = err.get('message', str(err)) if isinstance(err, dict) else str(err)
+                raise LILUAPIError(f"LILU API error: {err_msg}")
+
             data = raw
-            
-            # LILU API возвращает данные в формате {data: {...}, status: 1}
             if isinstance(raw, dict) and 'data' in raw:
                 data = raw['data']
                 if isinstance(data, list) and data:
                     data = data[0]
-            
+
+            if not data or not isinstance(data, dict):
+                raise LILUAPIError(f"LILU create returned unexpected format: {type(data)}")
+
             client = ClientModel.from_dict(data)
             if not client.id:
                 logger.warning(
@@ -389,6 +396,32 @@ class LILUConnector:
             logger.error(f"Unexpected error while searching client by phone: {e}")
             raise LILUAPIError(f"Failed to search client by phone: {e}")
     
+    def get_tags(self) -> List[Dict[str, Any]]:
+        """
+        Получить список тегов LILU (id + name).
+        Нужно для add-tag: LILU API требует tag_id, а не имя.
+        """
+        try:
+            response = self.client.get(ENDPOINTS['tags'])
+            raw = response.json()
+            data = raw.get('data', raw) if isinstance(raw, dict) else raw
+            if isinstance(data, list):
+                return [{'id': str(t.get('id', '')), 'name': str(t.get('name', ''))} if isinstance(t, dict) else {'id': '', 'name': str(t)} for t in data]
+            return []
+        except Exception as e:
+            logger.warning(f"Failed to fetch LILU tags: {e}")
+            return []
+
+    def _resolve_tag_name_to_id(self, tag_name: str) -> Optional[str]:
+        """Найти tag_id по имени тега."""
+        tags = self.get_tags()
+        tag_name_lower = (tag_name or '').strip().lower()
+        for t in tags:
+            name = (t.get('name') or '').strip()
+            if name.lower() == tag_name_lower:
+                return str(t.get('id', ''))
+        return None
+
     def update_client_tags(
         self,
         client_id: str,
@@ -397,68 +430,29 @@ class LILUConnector:
     ) -> ClientModel:
         """
         Обновить теги клиента.
-        
-        Args:
-            client_id: ID клиента в LILU
-            tags: Список тегов для добавления/обновления
-            merge: Если True - объединить с существующими тегами, если False - заменить
-        
-        Returns:
-            ClientModel: Обновленный клиент
-        
-        Raises:
-            NotFoundError: Если клиент не найден
-            AuthenticationError: При ошибке аутентификации
-            NetworkError: При проблемах с сетью
-            LILUAPIError: При других ошибках API
-        
-        Пример:
-            >>> connector = LILUConnector()
-            >>> client = connector.update_client_tags(
-            ...     "69660055fb13db648fc58795",
-            ...     ["api woo", "vip"],
-            ...     merge=True
-            ... )
+
+        LILU API использует PUT /people/{id}/add-tag с tag_id (не именем).
+        Для каждого тега: резолвим name -> id и вызываем add-tag.
         """
         try:
-            # Получаем текущего клиента
             current_client = self.get_client(client_id)
-            
-            # Определяем новые теги
-            if merge:
-                # Объединяем теги, убираем дубликаты, сохраняем порядок
-                new_tags = list(dict.fromkeys(current_client.tags + tags))
-            else:
-                new_tags = tags
-            
-            # Если теги не изменились, возвращаем клиента без обновления
-            if set(new_tags) == set(current_client.tags):
+            current_tag_names = {str(t).strip().lower() for t in (current_client.tags or [])}
+
+            tags_to_add = tags if not merge else [t for t in tags if str(t).strip().lower() not in current_tag_names]
+            if not tags_to_add:
                 logger.debug(f"Client {client_id} tags unchanged")
                 return current_client
-            
-            # Обновляем клиента через API
-            # В LILU API обновление происходит через PUT или PATCH
-            endpoint = ENDPOINTS['client'].format(client_id=client_id)
-            
-            update_data = {
-                'tags': new_tags
-            }
-            
-            logger.debug(f"Updating client {client_id} tags: {new_tags}")
-            
-            # Используем PUT для обновления (если API поддерживает)
-            # Если нет - используем POST с методом обновления
-            response = self.client.put(endpoint, json=update_data)
-            data = response.json()
-            
-            # LILU API возвращает данные в формате {data: {...}, status: 1}
-            if isinstance(data, dict) and 'data' in data:
-                data = data['data']
-            
-            updated_client = ClientModel.from_dict(data)
-            logger.info(f"Updated client {client_id} tags: {updated_client.tags}")
-            return updated_client
-        
+
+            for tag_name in tags_to_add:
+                tag_id = self._resolve_tag_name_to_id(tag_name)
+                if not tag_id:
+                    logger.warning(f"Tag '{tag_name}' not found in LILU. Create it in Settings > Tags.")
+                    continue
+                endpoint = ENDPOINTS['add_tag'].format(client_id=client_id)
+                self.client.put(endpoint, json={'tag_id': tag_id})
+                logger.debug(f"Added tag '{tag_name}' (id={tag_id}) to client {client_id}")
+
+            return self.get_client(client_id)
         except NotFoundError:
             logger.warning(f"Client {client_id} not found for tag update")
             raise
@@ -471,7 +465,21 @@ class LILUConnector:
         except Exception as e:
             logger.error(f"Unexpected error while updating client tags: {e}")
             raise LILUAPIError(f"Failed to update client tags: {e}")
-    
+
+    def add_client_comment(self, client_id: str, comment: str) -> None:
+        """
+        Добавить комментарий к подписчику (PUT /people/{id}/add-comment).
+        Используется для сохранения описания заказа WooCommerce.
+        """
+        if not comment or not str(comment).strip():
+            return
+        try:
+            endpoint = ENDPOINTS['add_comment'].format(client_id=client_id)
+            self.client.put(endpoint, json={'comment': str(comment).strip()})
+            logger.debug(f"Added comment to client {client_id}")
+        except Exception as e:
+            logger.warning(f"Failed to add comment to client {client_id}: {e}")
+
     # ==================== ПРОДУКТЫ ====================
     
     def get_products(

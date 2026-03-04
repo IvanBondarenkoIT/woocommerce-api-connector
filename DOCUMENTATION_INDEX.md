@@ -14,6 +14,7 @@
 ## 📖 Руководства (docs/guides/)
 
 - **[API_CONNECTION_GUIDE.md](docs/guides/API_CONNECTION_GUIDE.md)** - Руководство по подключению к WooCommerce API
+- **[WOO_TO_LILU_FIELD_MAPPING.md](docs/guides/WOO_TO_LILU_FIELD_MAPPING.md)** - Сопоставление полей WooCommerce → LILU при синхронизации
 - **[IMUNIFY360_GUIDE.md](docs/guides/IMUNIFY360_GUIDE.md)** - Полное руководство по решению проблемы Imunify360
 - **[IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md](docs/guides/IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md)** - Обход Imunify360 без whitelist IP (User-Agent)
 
@@ -52,6 +53,8 @@
 ## Быстрый доступ
 
 ### Решение проблем
+- **Imunify360 — главное правило** → [docs/guides/IMUNIFY360_MAIN_RULE.md](docs/guides/IMUNIFY360_MAIN_RULE.md) ← начни здесь
+- **Imunify360 — план решения (WC_HTTPS_PROXY, railway run)** → [docs/guides/IMUNIFY360_SOLUTION_PLAN.md](docs/guides/IMUNIFY360_SOLUTION_PLAN.md)
 - **Imunify360 блокирует — быстрое решение** → [docs/guides/IMUNIFY360_QUICK_FIX.md](docs/guides/IMUNIFY360_QUICK_FIX.md)
 - **Imunify360 подробно** → [docs/guides/IMUNIFY360_GUIDE.md](docs/guides/IMUNIFY360_GUIDE.md)
 - **Imunify360 без whitelist (User-Agent)** → [docs/guides/IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md](docs/guides/IMUNIFY360_BYPASS_WITHOUT_WHITELIST.md)

@@ -40,7 +40,17 @@ railway link   # привязать к проекту
 railway up    # деплой
 ```
 
+## Локальная разработка при блокировке Imunify360
+
+Если локально Imunify360 блокирует (residential IP), а на Railway работает — запускайте через Railway:
+
+```bash
+railway run python scripts/run_frontend.py
+```
+
+API-запросы пойдут с IP Railway (datacenter), обход без whitelist.
+
 ## Важно
 
 - **WC_USER_AGENT** обязателен для Imunify360 (dimkava.ge)
-- IP Railway будет другим — если Imunify360 блокирует по IP, добавьте IP Railway в whitelist или используйте User-Agent
+- Whitelist IP не используется — см. [IMUNIFY360_MAIN_RULE.md](../guides/IMUNIFY360_MAIN_RULE.md)

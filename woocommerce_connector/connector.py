@@ -8,6 +8,8 @@ import sys
 from typing import Optional, List, Dict, Any
 from woocommerce import API
 
+from .api.imunify_client import patch_api_with_browser_headers
+
 # Импортируем новые компоненты
 from .config import WooCommerceConfig
 from .utils.logger import setup_logger
@@ -21,6 +23,12 @@ from .api.exceptions import (
 
 # Настраиваем logger для модуля
 logger = setup_logger(__name__)
+
+def _response_text(response: Any) -> str:
+    """Безопасно получить текст ответа (совместимо с mock)."""
+    t = getattr(response, "text", None)
+    return str(t) if isinstance(t, str) else ""
+
 
 # Fix encoding for Windows console (оставляем для обратной совместимости)
 if sys.platform == 'win32':
@@ -87,7 +95,7 @@ class WooCommerceConnector:
         try:
             # User-Agent для обхода Imunify360 (документация: user_agent в конструктор API)
             # Важно: взять актуальный UA из браузера (F12 → Network → Request Headers)
-            user_agent = config.user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+            user_agent = config.user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
             self.wcapi = API(
                 url=self.url,
                 consumer_key=self.consumer_key,
@@ -97,7 +105,12 @@ class WooCommerceConnector:
                 query_string_auth=config.query_string_auth,
                 user_agent=user_agent,
             )
-            logger.debug(f"User-Agent установлен для Imunify360: {user_agent[:50]}...")
+            patch_api_with_browser_headers(
+                self.wcapi, self.url, proxy_url=getattr(self.config, "https_proxy", None)
+            )
+            logger.debug(f"User-Agent + browser headers для Imunify360: {user_agent[:50]}...")
+            if self.config.https_proxy:
+                logger.info("WC_HTTPS_PROXY задан — запросы WooCommerce через прокси (datacenter egress)")
             
             logger.info("WooCommerce API client initialized successfully")
         except Exception as e:
@@ -134,9 +147,18 @@ class WooCommerceConnector:
                 }
             )
             
+            # Imunify360 иногда возвращает 200 с ошибкой в теле
+            text = _response_text(response).lower()
+            if "imunify360" in text or "bot-protection" in text:
+                raise APIResponseError(
+                    403,
+                    "Access denied by Imunify360 bot-protection",
+                    _response_text(response)
+                )
+
             if response.status_code != 200:
                 error_msg = f"API Error: Status {response.status_code}"
-                logger.error(f"{error_msg} - Response: {response.text}")
+                logger.error(f"{error_msg} - Response: {_response_text(response)}")
                 
                 # Определяем тип ошибки по статусу
                 if response.status_code == 401:
@@ -147,7 +169,7 @@ class WooCommerceConnector:
                     raise APIResponseError(
                         response.status_code,
                         error_msg,
-                        response.text
+                        _response_text(response)
                     )
             
             logger.debug(f"Successfully fetched {len(response.json())} products from page {page}")
@@ -253,9 +275,9 @@ class WooCommerceConnector:
             elif response.status_code == 404:
                 raise NotFoundError("Product", str(product_id))
             else:
-                error_msg = f"Error: {response.status_code} - {response.text}"
+                error_msg = f"Error: {response.status_code} - {_response_text(response)}"
                 logger.error(error_msg)
-                raise APIResponseError(response.status_code, error_msg, response.text)
+                raise APIResponseError(response.status_code, error_msg, _response_text(response))
                 
         except (NotFoundError, APIResponseError):
             raise
@@ -322,9 +344,9 @@ class WooCommerceConnector:
             
         if response.status_code != 200:
             error_msg = f"Failed to fetch products: Status {response.status_code}"
-            logger.error(f"{error_msg} - Response: {response.text}")
+            logger.error(f"{error_msg} - Response: {_response_text(response)}")
             print(error_msg)
-            print(f"Response: {response.text}")
+            print(f"Response: {_response_text(response)}")
             return
         
         products = response.json()
@@ -379,7 +401,7 @@ class WooCommerceConnector:
                 print(f"\nTesting version: {version}...", end=" ")
                 
                 # Создаем временный API экземпляр с этой версией (user_agent для Imunify360)
-                user_agent = self.config.user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                user_agent = self.config.user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
                 test_api = API(
                     url=self.url,
                     consumer_key=self.consumer_key,
@@ -389,7 +411,11 @@ class WooCommerceConnector:
                     query_string_auth=True,
                     user_agent=user_agent,
                 )
-                
+                patch_api_with_browser_headers(
+                    test_api, self.url,
+                    proxy_url=getattr(self.config, "https_proxy", None),
+                )
+
                 # Пробуем получить system_status или products
                 response = test_api.get('system_status')
                 if response.status_code == 200:
@@ -459,10 +485,19 @@ class WooCommerceConnector:
             
             logger.debug(f"Fetching orders: page={page}, per_page={per_page}, status={status}")
             response = self.wcapi.get('orders', params=params)
-            
+
+            # Imunify360 иногда возвращает 200 с ошибкой в теле
+            text = _response_text(response).lower()
+            if "imunify360" in text or "bot-protection" in text:
+                raise APIResponseError(
+                    403,
+                    "Access denied by Imunify360 bot-protection",
+                    _response_text(response)
+                )
+
             if response.status_code != 200:
                 error_msg = f"API Error: Status {response.status_code}"
-                logger.error(f"{error_msg} - Response: {response.text}")
+                logger.error(f"{error_msg} - Response: {_response_text(response)}")
                 
                 # Определяем тип ошибки по статусу
                 if response.status_code == 401:
@@ -473,7 +508,7 @@ class WooCommerceConnector:
                     raise APIResponseError(
                         response.status_code,
                         error_msg,
-                        response.text
+                        _response_text(response)
                     )
             
             logger.debug(f"Successfully fetched {len(response.json())} orders from page {page}")
@@ -562,6 +597,15 @@ class WooCommerceConnector:
         try:
             logger.debug(f"Fetching order with ID: {order_id}")
             response = self.wcapi.get(f'orders/{order_id}')
+
+            # Imunify360 иногда возвращает 200 с ошибкой в теле
+            text = _response_text(response).lower()
+            if "imunify360" in text or "bot-protection" in text:
+                raise APIResponseError(
+                    403,
+                    "Access denied by Imunify360 bot-protection",
+                    _response_text(response)
+                )
             
             if response.status_code == 200:
                 order = response.json()
@@ -570,9 +614,9 @@ class WooCommerceConnector:
             elif response.status_code == 404:
                 raise NotFoundError("Order", str(order_id))
             else:
-                error_msg = f"Error: {response.status_code} - {response.text}"
+                error_msg = f"Error: {response.status_code} - {_response_text(response)}"
                 logger.error(error_msg)
-                raise APIResponseError(response.status_code, error_msg, response.text)
+                raise APIResponseError(response.status_code, error_msg, _response_text(response))
                 
         except (NotFoundError, APIResponseError):
             raise
@@ -640,7 +684,7 @@ def check_api_version_standalone() -> Optional[str]:
             logger.debug(f"Testing version: {version}")
             print(f"Testing version: {version:10} ... ", end="")
             
-            user_agent = config.user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            user_agent = config.user_agent or 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
             test_api = API(
                 url=config.url,
                 consumer_key=config.consumer_key,
@@ -650,7 +694,11 @@ def check_api_version_standalone() -> Optional[str]:
                 query_string_auth=True,
                 user_agent=user_agent,
             )
-            
+            patch_api_with_browser_headers(
+                test_api, config.url,
+                proxy_url=getattr(config, "https_proxy", None),
+            )
+
             # Пробуем products endpoint (самый распространенный)
             response = test_api.get('products', params={'per_page': 1})
             
